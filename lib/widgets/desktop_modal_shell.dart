@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:inventory_bkm_desktop/theme/app_theme.dart';
 
 class DesktopModalShell extends StatelessWidget {
   const DesktopModalShell({
@@ -44,10 +45,10 @@ class DesktopModalShell extends StatelessWidget {
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2E7D32).withOpacity(0.12),
+                          color: AppTheme.primary.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(icon, color: const Color(0xFF2E7D32)),
+                        child: Icon(icon, color: AppTheme.primary),
                       ),
                       const SizedBox(width: 12),
                     ],
@@ -61,7 +62,7 @@ class DesktopModalShell extends StatelessWidget {
                                 .textTheme
                                 .titleMedium
                                 ?.copyWith(
-                                  color: const Color(0xFF1D2B38),
+                                  color: AppTheme.textPrimary,
                                   fontWeight: FontWeight.w800,
                                 ),
                           ),
@@ -72,7 +73,7 @@ class DesktopModalShell extends StatelessWidget {
                               style: Theme.of(context)
                                   .textTheme
                                   .bodySmall
-                                  ?.copyWith(color: const Color(0xFF68777A)),
+                                  ?.copyWith(color: AppTheme.textSecondary),
                             ),
                           ],
                         ],

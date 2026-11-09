@@ -20,7 +20,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Inventory BKM',
+      title: 'INVENTORY BLOKM',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: AuthGate(apiService: apiService),

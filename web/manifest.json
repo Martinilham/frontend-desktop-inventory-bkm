@@ -1,11 +1,11 @@
 {
-    "name": "inventory_bkm_desktop",
-    "short_name": "inventory_bkm_desktop",
+    "name": "INVENTORY BLOKM",
+    "short_name": "INVENTORY BLOKM",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "INVENTORY BLOKM",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

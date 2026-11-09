@@ -16,6 +16,9 @@
 2. Jalankan file run.bat.
 3. Jika Flutter belum terinstal, instal dulu Flutter SDK dan pastikan folder bin ada di PATH.
 
+### OCR pada Windows
+- OCR form customer berjalan di aplikasi mobile. Desktop menampilkan foto form dan baris hasil OCR yang telah disimpan dari mobile.
+
 ## Login awal
 - Email: admin@company.local
 - Password: Admin123!

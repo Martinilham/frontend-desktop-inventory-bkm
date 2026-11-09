@@ -12,10 +12,13 @@ extension DashboardDisposalPanels on _DashboardScreenState {
     final dateTo = analysis['dateTo']?.toString() ?? '-';
     final workbook = analysis['workbook']?.toString() ?? 'Excel analisa';
     final formatter = NumberFormat('#,##0.####', 'id_ID');
-    final availableGroups = ['all', ...summary.map((raw) {
-      final item = Map<String, dynamic>.from(raw as Map);
-      return item['group']?.toString() ?? '-';
-    })];
+    final availableGroups = [
+      'all',
+      ...summary.map((raw) {
+        final item = Map<String, dynamic>.from(raw as Map);
+        return item['group']?.toString() ?? '-';
+      })
+    ];
     final activeGroup = availableGroups.contains(_analysisGroupFilter)
         ? _analysisGroupFilter
         : 'all';
@@ -32,10 +35,8 @@ extension DashboardDisposalPanels on _DashboardScreenState {
       });
     }
     final start = currentPage * _analysisRowsPerPage;
-    final pageItems = filteredItems
-        .skip(start)
-        .take(_analysisRowsPerPage)
-        .toList();
+    final pageItems =
+        filteredItems.skip(start).take(_analysisRowsPerPage).toList();
 
     return RefreshIndicator(
       onRefresh: _refreshDashboard,
@@ -47,7 +48,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE5EBDD)),
+              border: Border.all(color: AppTheme.border),
             ),
             child: Row(
               children: [
@@ -55,11 +56,11 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                   width: 54,
                   height: 54,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2E7D32).withOpacity(0.14),
+                    color: AppTheme.primary.withOpacity(0.14),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: const Icon(Icons.analytics_outlined,
-                      color: Color(0xFF2E7D32), size: 30),
+                      color: AppTheme.primary, size: 30),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -70,7 +71,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                         'Analisa Selisih Produk Harian',
                         style:
                             Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  color: const Color(0xFF1D2B38),
+                                  color: AppTheme.textPrimary,
                                   fontWeight: FontWeight.w800,
                                 ),
                       ),
@@ -79,7 +80,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                         '$workbook | $dateFrom sampai $dateTo',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Color(0xFF68777A)),
+                        style: const TextStyle(color: AppTheme.textSecondary),
                       ),
                     ],
                   ),
@@ -94,13 +95,13 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                   onPressed: items.isEmpty
                       ? null
                       : () => _exportAnalysisToExcel(
-                          filteredItems,
-                          dateFrom,
-                          dateTo,
-                          filePrefix: activeGroup == 'all'
-                              ? 'analisa_selisih'
-                              : 'analisa_selisih_${activeGroup.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}',
-                        ),
+                            filteredItems,
+                            dateFrom,
+                            dateTo,
+                            filePrefix: activeGroup == 'all'
+                                ? 'analisa_selisih'
+                                : 'analisa_selisih_${activeGroup.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}',
+                          ),
                   icon: const Icon(Icons.table_chart_outlined),
                   label: const Text('Export Excel'),
                 ),
@@ -109,16 +110,16 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                   onPressed: items.isEmpty
                       ? null
                       : () => _exportAnalysisToPdf(
-                          filteredItems,
-                          dateFrom,
-                          dateTo,
-                          title: activeGroup == 'all'
-                              ? 'Analisa Selisih Produk Harian'
-                              : 'Analisa Selisih Produk $activeGroup',
-                          filePrefix: activeGroup == 'all'
-                              ? 'analisa_selisih'
-                              : 'analisa_selisih_${activeGroup.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}',
-                        ),
+                            filteredItems,
+                            dateFrom,
+                            dateTo,
+                            title: activeGroup == 'all'
+                                ? 'Analisa Selisih Produk Harian'
+                                : 'Analisa Selisih Produk $activeGroup',
+                            filePrefix: activeGroup == 'all'
+                                ? 'analisa_selisih'
+                                : 'analisa_selisih_${activeGroup.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}',
+                          ),
                   icon: const Icon(Icons.picture_as_pdf_outlined),
                   label: const Text('Export PDF'),
                 ),
@@ -131,12 +132,11 @@ extension DashboardDisposalPanels on _DashboardScreenState {
             runSpacing: 14,
             children: [
               _analysisInfoCard('Total Selisih', items.length.toString(),
-                  Icons.format_list_numbered_outlined,
-                  const Color(0xFF2E7D32)),
+                  Icons.format_list_numbered_outlined, AppTheme.primary),
               _analysisInfoCard('Dari Tanggal', dateFrom,
-                  Icons.calendar_today_outlined, const Color(0xFF1AAE9C)),
+                  Icons.calendar_today_outlined, AppTheme.primary),
               _analysisInfoCard('Sampai Tanggal', dateTo,
-                  Icons.event_available_outlined, const Color(0xFFE07A2F)),
+                  Icons.event_available_outlined, AppTheme.accent),
             ],
           ),
           if (summary.isNotEmpty) ...[
@@ -180,7 +180,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                         children: [
                           const Text('Filter kategori',
                               style: TextStyle(
-                                  color: Color(0xFF1D2B38),
+                                  color: AppTheme.textPrimary,
                                   fontWeight: FontWeight.w800)),
                           const SizedBox(width: 12),
                           DropdownButton<String>(
@@ -201,7 +201,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                           Text(
                             '${filteredItems.length} data',
                             style:
-                                const TextStyle(color: Color(0xFF68777A)),
+                                const TextStyle(color: AppTheme.textSecondary),
                           ),
                         ],
                       ),
@@ -210,7 +210,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                         borderRadius: BorderRadius.circular(14),
                         child: Container(
                           decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFE5EBDD)),
+                            border: Border.all(color: AppTheme.border),
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: SingleChildScrollView(
@@ -226,10 +226,10 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                                 DataColumn(label: Text('Nama Barang')),
                                 DataColumn(label: Text('Unit')),
                                 DataColumn(
-                                    numeric: true,
-                                    label: Text('PO/BO/TO IN')),
+                                    numeric: true, label: Text('PO/BO/TO IN')),
                                 DataColumn(numeric: true, label: Text('Sales')),
-                                DataColumn(numeric: true, label: Text('Selisih')),
+                                DataColumn(
+                                    numeric: true, label: Text('Selisih')),
                                 DataColumn(label: Text('Note')),
                               ],
                               rows: pageItems.map((item) {
@@ -241,10 +241,10 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                                       _showAnalysisItemDialog(
                                           item, items, formatter),
                                   cells: [
-                                    DataCell(Text(
-                                        item['date']?.toString() ?? '-')),
-                                    DataCell(Text(
-                                        item['group']?.toString() ?? '-')),
+                                    DataCell(
+                                        Text(item['date']?.toString() ?? '-')),
+                                    DataCell(
+                                        Text(item['group']?.toString() ?? '-')),
                                     DataCell(Text(
                                         item['itemNumber']?.toString() ?? '-')),
                                     DataCell(Text(
@@ -285,7 +285,8 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                         children: [
                           Text(
                             'Menampilkan ${start + 1}-${math.min(start + pageItems.length, filteredItems.length)} dari ${filteredItems.length}',
-                            style: const TextStyle(color: Color(0xFF68777A)),
+                            style:
+                                const TextStyle(color: AppTheme.textSecondary),
                           ),
                           const Spacer(),
                           DropdownButton<int>(
@@ -335,7 +336,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5EBDD)),
+          border: Border.all(color: AppTheme.border),
         ),
         child: Row(
           children: [
@@ -360,9 +361,10 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                     style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF1D2B38)),
+                        color: AppTheme.textPrimary),
                   ),
-                  Text(label, style: const TextStyle(color: Color(0xFF68777A))),
+                  Text(label,
+                      style: const TextStyle(color: AppTheme.textSecondary)),
                 ],
               ),
             ),
@@ -381,9 +383,9 @@ extension DashboardDisposalPanels on _DashboardScreenState {
         width: 210,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF5F7EF),
+          color: AppTheme.tableHeader,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5EBDD)),
+          border: Border.all(color: AppTheme.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -393,19 +395,19 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                 Expanded(
                   child: Text(title,
                       style: const TextStyle(
-                          color: Color(0xFF1D2B38),
+                          color: AppTheme.textPrimary,
                           fontWeight: FontWeight.w800)),
                 ),
                 const Icon(Icons.open_in_new,
-                    size: 16, color: Color(0xFF68777A)),
+                    size: 16, color: AppTheme.textSecondary),
               ],
             ),
             const SizedBox(height: 6),
-            Text(count, style: const TextStyle(color: Color(0xFF68777A))),
+            Text(count, style: const TextStyle(color: AppTheme.textSecondary)),
             const SizedBox(height: 4),
             Text('Total |selisih| $total',
-                style:
-                    const TextStyle(color: Color(0xFF68777A), fontSize: 12)),
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 12)),
           ],
         ),
       ),
@@ -494,8 +496,8 @@ extension DashboardDisposalPanels on _DashboardScreenState {
               final totalAbs =
                   (product['totalAbsDifference'] as num?)?.toDouble() ?? 0;
               return ListTile(
-                onTap: () => _showAnalysisProductDatesDialog(
-                    product, formatter),
+                onTap: () =>
+                    _showAnalysisProductDatesDialog(product, formatter),
                 title: Text(
                   '${product['itemNumber']} - ${product['itemName']}',
                   maxLines: 1,
@@ -518,7 +520,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                     ),
                     Text('|selisih| ${formatter.format(totalAbs)}',
                         style: const TextStyle(
-                            color: Color(0xFF68777A), fontSize: 12)),
+                            color: AppTheme.textSecondary, fontSize: 12)),
                   ],
                 ),
               );
@@ -531,13 +533,13 @@ extension DashboardDisposalPanels on _DashboardScreenState {
 
   Future<void> _showAnalysisItemDialog(Map<String, dynamic> item,
       List<Map<String, dynamic>> items, NumberFormat formatter) async {
-    final product = _analysisProductsForGroup(item['group']?.toString() ?? '-',
-            items)
-        .firstWhere(
-            (product) =>
-                product['itemNumber']?.toString() ==
-                item['itemNumber']?.toString(),
-            orElse: () => {});
+    final product =
+        _analysisProductsForGroup(item['group']?.toString() ?? '-', items)
+            .firstWhere(
+                (product) =>
+                    product['itemNumber']?.toString() ==
+                    item['itemNumber']?.toString(),
+                orElse: () => {});
     if (product.isEmpty) return;
     await _showAnalysisProductDatesDialog(product, formatter);
   }
@@ -602,7 +604,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: Color(0xFFE5EBDD)),
+          side: const BorderSide(color: AppTheme.border),
         ),
         child: Padding(
           padding: const EdgeInsets.all(28),
@@ -637,7 +639,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: Color(0xFFE5EBDD)),
+          side: const BorderSide(color: AppTheme.border),
         ),
         child: Padding(
           padding: const EdgeInsets.all(18),
@@ -677,7 +679,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFFE5EBDD)),
+        side: const BorderSide(color: AppTheme.border),
       ),
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -708,9 +710,9 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF5F7EF),
+                    color: AppTheme.tableHeader,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE5EBDD)),
+                    border: Border.all(color: AppTheme.border),
                   ),
                   child: Row(
                     children: [
@@ -723,11 +725,18 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                                     fontWeight: FontWeight.bold)),
                             Text(map['date'] ?? '-',
                                 style: TextStyle(color: Colors.black54)),
+                            Text(
+                              'Cost Amount: ${NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 2).format((map['costAmount'] as num?)?.toDouble() ?? 0)}',
+                              style: const TextStyle(
+                                  color: AppTheme.textSecondary, fontSize: 12),
+                            ),
                             const SizedBox(height: 6),
                             Text(
                                 journal.isEmpty ? 'Tidak ada jurnal.' : journal,
                                 style: TextStyle(
                                     color: Colors.black54, fontSize: 12)),
+                            const SizedBox(height: 8),
+                            _disposalPostingStatusBadge(map),
                           ],
                         ),
                       ),
@@ -829,7 +838,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
             Text(
               'Preview Foto',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF1D2B38),
+                    color: AppTheme.textPrimary,
                     fontWeight: FontWeight.w800,
                   ),
             ),
@@ -840,9 +849,8 @@ extension DashboardDisposalPanels on _DashboardScreenState {
                 final fileName = File(path).uri.pathSegments.last;
                 _showLocalImagePreview(fileName, path);
               },
-              onRemove: (index) => setState(() =>
-                  _photoPaths = List<String>.from(_photoPaths)
-                    ..removeAt(index)),
+              onRemove: (index) => setState(() => _photoPaths =
+                  List<String>.from(_photoPaths)..removeAt(index)),
             ),
           ],
           if (_scannedPdfPath != null) ...[
@@ -850,7 +858,7 @@ extension DashboardDisposalPanels on _DashboardScreenState {
             Text(
               'Preview PDF',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF1D2B38),
+                    color: AppTheme.textPrimary,
                     fontWeight: FontWeight.w800,
                   ),
             ),

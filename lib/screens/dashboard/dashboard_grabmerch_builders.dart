@@ -19,7 +19,7 @@ extension DashboardGrabMerchBuilders on _DashboardScreenState {
                     style: Theme.of(context)
                         .textTheme
                         .bodyMedium
-                        ?.copyWith(color: const Color(0xFF68777A))),
+                        ?.copyWith(color: AppTheme.textSecondary)),
                 const SizedBox(height: 20),
                 if (items.isEmpty)
                   const Padding(
@@ -60,7 +60,7 @@ extension DashboardGrabMerchBuilders on _DashboardScreenState {
                             surfaceTintColor: Colors.transparent,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
-                              side: const BorderSide(color: Color(0xFFE5EBDD)),
+                              side: const BorderSide(color: AppTheme.border),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -99,13 +99,13 @@ extension DashboardGrabMerchBuilders on _DashboardScreenState {
                                       Text(
                                         'Uploaded by: ${map['uploadedBy'] ?? '-'}',
                                         style: const TextStyle(
-                                            color: Color(0xFF68777A)),
+                                            color: AppTheme.textSecondary),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         'Created at: ${map['createdAt'] ?? '-'}',
                                         style: const TextStyle(
-                                          color: Color(0xFF68777A),
+                                          color: AppTheme.textSecondary,
                                           fontSize: 12,
                                         ),
                                       ),

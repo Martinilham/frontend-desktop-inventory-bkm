@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:inventory_bkm_desktop/theme/app_theme.dart';
 
 class DesktopActionDialog extends StatelessWidget {
   const DesktopActionDialog({
@@ -31,7 +32,7 @@ class DesktopActionDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = success ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
+    final accent = success ? AppTheme.primary : const Color(0xFFC62828);
     final icon = success ? Icons.check_circle_outline : Icons.error_outline;
 
     return Dialog(
@@ -74,18 +75,22 @@ class DesktopActionDialog extends StatelessWidget {
                   title,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: const Color(0xFF1D2B38),
+                        color: AppTheme.textPrimary,
                         fontWeight: FontWeight.w800,
                       ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF68777A),
-                        height: 1.35,
-                      ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppTheme.textSecondary,
+                            height: 1.35,
+                          ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 24),
                 SizedBox(

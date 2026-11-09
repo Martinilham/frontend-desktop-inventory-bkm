@@ -1,16 +1,24 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
+import 'dart:ui' show ImageFilter;
 
 import 'package:excel/excel.dart' as xls;
 import 'package:file_picker/file_picker.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:inventory_bkm_desktop/theme/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:inventory_bkm_desktop/screens/accounts_screen.dart';
 import 'package:inventory_bkm_desktop/screens/daily_worker_screen.dart';
+import 'package:inventory_bkm_desktop/screens/inventory_deadline_screen.dart';
+import 'package:inventory_bkm_desktop/screens/inventory_transaction_screen.dart';
+import 'package:inventory_bkm_desktop/screens/sozai_production_master_screen.dart';
+import 'package:inventory_bkm_desktop/screens/monitor_devices_screen.dart';
 import 'package:inventory_bkm_desktop/services/api_service.dart';
 import 'package:inventory_bkm_desktop/widgets/desktop_action_dialog.dart';
 import 'package:inventory_bkm_desktop/widgets/desktop_modal_shell.dart';
@@ -23,6 +31,7 @@ import 'package:printing/printing.dart';
 
 part 'dashboard/dashboard_layout_builders.dart';
 part 'dashboard/dashboard_disposal_builders.dart';
+part 'dashboard/dashboard_disposal_import_management.dart';
 part 'dashboard/dashboard_disposal_list_builders.dart';
 part 'dashboard/dashboard_disposal_dialogs.dart';
 part 'dashboard/dashboard_disposal_exports.dart';
@@ -34,7 +43,18 @@ part 'dashboard/dashboard_absence_builders.dart';
 
 enum DashboardSection {
   home,
-  disposalData,
+  disposalInput,
+  disposalStatistics,
+  docsReceipt,
+  customerUpdateForms,
+  docsFiles,
+  docsAbsence,
+  docsOvertime,
+  docsStockAdjustment,
+  inventoryDeadlines,
+  inventoryTransactions,
+  sozaiProductionMaster,
+  monitorDevices,
   analysis,
   grabMerch,
   dailyWorker,
@@ -54,6 +74,39 @@ enum DisposalSortOption {
 enum TrendFilterMode {
   monthly,
   daily,
+}
+
+enum DisposalComparisonPeriod {
+  weekly,
+  monthly,
+}
+
+enum DisposalComparisonMode {
+  defaultPeriod,
+  custom,
+}
+
+class _DisposalComparisonEmptyState extends StatelessWidget {
+  final String message;
+
+  const _DisposalComparisonEmptyState({
+    this.message = 'Belum ada data untuk periode yang dibandingkan.',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 100,
+      width: double.infinity,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppTheme.tableHeader,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Text(message, textAlign: TextAlign.center),
+    );
+  }
 }
 
 const List<Map<String, String>> _disposalDivisions = [
@@ -82,6 +135,8 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   DashboardSection _selectedSection = DashboardSection.home;
+  bool _disposalMenuExpanded = true;
+  bool _documentationMenuExpanded = true;
   late Future<Map<String, dynamic>> _dashboardFuture;
   late Future<Map<String, dynamic>> _analysisFuture;
   String _selectedDivision = 'grocery';
@@ -89,17 +144,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<String> _photoPaths = [];
   String? _scannedPdfPath;
   bool _isUploading = false;
+  bool _isUploadingReceiptAttachment = false;
+  List<dynamic>? _receiptFilesOverride;
+  bool _isImportingDisposals = false;
+  bool _isManagingDisposalImports = false;
+  String _disposalFolderProgress = '';
   final TextEditingController _journalController = TextEditingController();
   final TextEditingController _absenceNameController = TextEditingController();
   String _selectedAbsenceType = 'izin';
   String? _absenceProofPath;
   bool _isUploadingAbsence = false;
+  String? _selectedCustomerFormDocumentId;
 
   DateTime? _filterStartDate;
   DateTime? _filterEndDate;
   DateTime _analysisTrendDate = DateTime.now();
   int _analysisTrendYear = DateTime.now().year;
   TrendFilterMode _analysisTrendMode = TrendFilterMode.monthly;
+  DisposalComparisonPeriod _disposalComparisonPeriod =
+      DisposalComparisonPeriod.weekly;
+  DisposalComparisonMode _disposalComparisonMode =
+      DisposalComparisonMode.defaultPeriod;
+  DateTime _disposalComparisonDate = DateTime.now();
+  DateTimeRange? _customCurrentDisposalRange;
+  DateTimeRange? _customPreviousDisposalRange;
+  DateTimeRange? _weeklyDisposalDateRange;
+  int _weeklyDisposalPage = 0;
+  int _weeklyDisposalRowsPerPage = 15;
   int _analysisPage = 0;
   int _analysisRowsPerPage = 15;
   String _analysisGroupFilter = 'all';
@@ -107,6 +178,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   DisposalSortOption _disposalSortOption = DisposalSortOption.newestDate;
   bool _isExportingPdf = false;
   final Map<String, int> _photoQuarterTurns = {};
+  final Map<String, Future<Uint8List>> _disposalPdfBytesCache = {};
   final Set<String> _dirtyPhotoRotations = {};
   final ValueNotifier<int> _photoRotationVersion = ValueNotifier<int>(0);
   final TextEditingController _disposalSearchController =
@@ -119,12 +191,95 @@ class _DashboardScreenState extends State<DashboardScreen> {
     {'value': 'lemburan', 'label': 'Surat Lemburan'},
     {'value': 'pulang_cepat', 'label': 'Surat Pulang Cepat'},
   ];
+  List<String> _receiptLocationOptions = [];
 
   @override
   void initState() {
     super.initState();
     _dashboardFuture = _loadDashboardData();
     _analysisFuture = widget.apiService.getDailyProductAnalysis();
+    _loadReceiptLocations();
+  }
+
+  Future<void> _loadReceiptLocations() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _receiptLocationOptions = prefs.getStringList('receipt_location_options') ?? [];
+    });
+  }
+
+  Future<void> _manageReceiptLocations() async {
+    final prefs = await SharedPreferences.getInstance();
+    final options = List<String>.from(_receiptLocationOptions);
+    final input = TextEditingController();
+    try {
+      final saved = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('Pengaturan Pilihan Lokasi'),
+            content: SizedBox(
+              width: 420,
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Row(children: [
+                  Expanded(child: TextField(
+                    controller: input,
+                    decoration: const InputDecoration(labelText: 'Tambah lokasi'),
+                    onSubmitted: (value) {
+                      final item = value.trim();
+                      if (item.isNotEmpty && !options.contains(item)) {
+                        setDialogState(() => options.add(item));
+                        input.clear();
+                      }
+                    },
+                  )),
+                  IconButton(
+                    tooltip: 'Tambah',
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: () {
+                      final item = input.text.trim();
+                      if (item.isNotEmpty && !options.contains(item)) {
+                        setDialogState(() => options.add(item));
+                        input.clear();
+                      }
+                    },
+                  ),
+                ]),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 240,
+                  child: options.isEmpty
+                      ? const Center(child: Text('Belum ada pilihan lokasi.'))
+                      : ListView.builder(
+                          itemCount: options.length,
+                          itemBuilder: (context, index) => ListTile(
+                            dense: true,
+                            title: Text(options[index]),
+                            trailing: IconButton(
+                              tooltip: 'Hapus pilihan',
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () => setDialogState(() => options.removeAt(index)),
+                            ),
+                          ),
+                        ),
+                ),
+              ]),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Batal')),
+              FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Simpan')),
+            ],
+          ),
+        ),
+      );
+      if (saved == true) {
+        await prefs.setStringList('receipt_location_options', options);
+        if (mounted) setState(() => _receiptLocationOptions = options);
+      }
+    } finally {
+      Future<void>.delayed(const Duration(milliseconds: 300), input.dispose);
+    }
   }
 
   Future<Map<String, dynamic>> _loadDashboardData() async {
@@ -133,15 +288,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final users = await widget.apiService.listUsers();
       final audit = await widget.apiService.listAudit();
       final disposals = await widget.apiService.listDisposals();
+      var inventoryBalances = <dynamic>[];
+      var receiptHistory = <dynamic>[];
+      try {
+        final inventory = await widget.apiService.getInventoryTransactions();
+        inventoryBalances = List<dynamic>.from(inventory['balances'] ?? []);
+        receiptHistory = List<dynamic>.from(inventory['receiptHistory'] ?? []);
+      } on AuthException {
+        rethrow;
+      } catch (_) {
+        // Disposal records can still be shown when no stock snapshot is available.
+      }
       final files = await widget.apiService.listFiles();
+      _receiptFilesOverride ??= List<dynamic>.from(files);
 
       return {
         'me': me['user'],
         'users': users,
         'audit': audit,
-        'disposals': disposals,
+        'disposals': _addDisposalStockStatus(
+            disposals, inventoryBalances, receiptHistory),
         'grabmerch': await widget.apiService.listGrabMerch(),
         'absenceDocuments': await widget.apiService.listAbsenceDocuments(),
+        'formPhotoDocuments': await widget.apiService.listFormPhotoDocuments(),
         'readData': await widget.apiService.listReadData(),
         'files': files,
       };
@@ -448,31 +617,156 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFBF7),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final compactSidebar = constraints.maxWidth < 1100;
-          return Row(
-            children: [
-              _buildSidebar(compact: compactSidebar),
-              Expanded(
-                child: Column(
-                  children: [
-                    _buildTopBar(context, compact: constraints.maxWidth < 900),
-                    Expanded(
-                      child: Container(
-                        width: double.infinity,
-                        color: const Color(0xFFFAFBF7),
-                        child: _buildMainContent(context),
-                      ),
+      backgroundColor: const Color(0xFFF8FAF8),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: _DesktopBackdrop()),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compactSidebar = constraints.maxWidth < 1100;
+              return Row(
+                children: [
+                  _buildSidebar(compact: compactSidebar),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _buildTopBar(context,
+                            compact: constraints.maxWidth < 900),
+                        Expanded(
+                          child: Container(
+                            width: double.infinity,
+                            color: Colors.transparent,
+                            child: _buildMainContent(context),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReceiptLocationDropdown extends StatefulWidget {
+  const _ReceiptLocationDropdown({
+    required this.controller,
+    required this.label,
+    required this.options,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final List<String> options;
+
+  @override
+  State<_ReceiptLocationDropdown> createState() =>
+      _ReceiptLocationDropdownState();
+}
+
+class _ReceiptLocationDropdownState extends State<_ReceiptLocationDropdown> {
+  String? _value;
+
+  @override
+  void initState() {
+    super.initState();
+    final current = widget.controller.text.trim();
+    _value = current.isEmpty ? null : current;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final values = [...widget.options];
+    final current = widget.controller.text.trim();
+    if (current.isNotEmpty && !values.contains(current)) values.add(current);
+    return DropdownButtonFormField<String>(
+      value: _value,
+      decoration: InputDecoration(labelText: widget.label),
+      items: [
+        const DropdownMenuItem<String>(value: '', child: Text('Pilih lokasi')),
+        ...values.map((value) => DropdownMenuItem(value: value, child: Text(value))),
+      ],
+      onChanged: (value) {
+        setState(() => _value = value);
+        widget.controller.text = value ?? '';
+      },
+    );
+  }
+}
+
+class _DesktopBackdrop extends StatelessWidget {
+  const _DesktopBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFF9FCFA), Color(0xFFFDF8F3), Color(0xFFF5FAF7)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        Positioned(
+          top: -210,
+          right: -120,
+          child: ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+            child: Container(
+              width: 520,
+              height: 520,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [Color(0x99F5823A), Color(0x00F5823A)],
                 ),
               ),
-            ],
-          );
-        },
-      ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 140,
+          top: 180,
+          child: ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 58, sigmaY: 58),
+            child: Container(
+              width: 440,
+              height: 440,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [Color(0x77249A4A), Color(0x00249A4A)],
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 160,
+          bottom: -300,
+          child: ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 54, sigmaY: 54),
+            child: Container(
+              width: 600,
+              height: 600,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [Color(0x66F4C95D), Color(0x00F4C95D)],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

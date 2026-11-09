@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:inventory_bkm_desktop/theme/app_theme.dart';
 
 class LandscapeImageFrame extends StatelessWidget {
   const LandscapeImageFrame({
@@ -32,7 +33,7 @@ class LandscapeImageFrame extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFFF4F7FB),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5EBDD)),
+          border: Border.all(color: AppTheme.border),
         ),
         child: AspectRatio(
           aspectRatio: 16 / 9,

@@ -4,10 +4,170 @@ part of '../dashboard_screen.dart';
 extension DashboardDisposalExports on _DashboardScreenState {
   static const double _pdfScanImageWidth = 500;
   static const double _pdfScanImageHeight = 600;
-  static const double _pdfPhotoWidth = 220;
-  static const double _pdfPhotoHeight = 160;
-  static const double _pdfPhotoPadding = 0;
 
+  Future<void> _exportDisposalPostingDataToExcel(
+      List<dynamic> disposals) async {
+    final directoryPath = await FilePicker.platform.getDirectoryPath();
+    if (directoryPath == null) return;
+
+    final workbook = xls.Excel.createExcel();
+    workbook.rename('Sheet1', 'Posting per Jurnal');
+    workbook.setDefaultSheet('Posting per Jurnal');
+    final sheet = workbook['Posting per Jurnal'];
+    const headers = ['Tanggal', 'Divisi', 'Jurnal', 'Status Posting Jurnal'];
+    final navy = xls.ExcelColor.fromHexString('#17365D');
+    final lightBlue = xls.ExcelColor.fromHexString('#DCE6F1');
+    final borderColor = xls.ExcelColor.fromHexString('#D9E2F3');
+    final white = xls.ExcelColor.fromHexString('#FFFFFF');
+    final green = xls.ExcelColor.fromHexString('#E2F0D9');
+    final orange = xls.ExcelColor.fromHexString('#FCE4D6');
+    final blue = xls.ExcelColor.fromHexString('#DDEBF7');
+
+    sheet.merge(xls.CellIndex.indexByString('A1'), xls.CellIndex.indexByString('D1'));
+    sheet.cell(xls.CellIndex.indexByString('A1')).value =
+        xls.TextCellValue('RINGKASAN KELAYAKAN POSTING PER JURNAL');
+    sheet.cell(xls.CellIndex.indexByString('A1')).cellStyle = xls.CellStyle(
+      backgroundColorHex: navy,
+      fontColorHex: white,
+      bold: true,
+      fontSize: 16,
+      horizontalAlign: xls.HorizontalAlign.Center,
+      verticalAlign: xls.VerticalAlign.Center,
+    );
+    sheet.setRowHeight(0, 34);
+    sheet.merge(xls.CellIndex.indexByString('A2'), xls.CellIndex.indexByString('D2'));
+    sheet.cell(xls.CellIndex.indexByString('A2')).value = xls.TextCellValue(
+      'Jurnal hanya siap posting jika semua item di dalam jurnal tersebut siap posting.',
+    );
+    sheet.cell(xls.CellIndex.indexByString('A2')).cellStyle = xls.CellStyle(
+      backgroundColorHex: lightBlue,
+      fontColorHex: navy,
+      italic: true,
+      horizontalAlign: xls.HorizontalAlign.Center,
+      verticalAlign: xls.VerticalAlign.Center,
+      textWrapping: xls.TextWrapping.WrapText,
+    );
+    sheet.setRowHeight(1, 28);
+
+    for (var column = 0; column < headers.length; column++) {
+      final cell = sheet.cell(xls.CellIndex.indexByColumnRow(
+          columnIndex: column, rowIndex: 3));
+      cell.value = xls.TextCellValue(headers[column]);
+      cell.cellStyle = xls.CellStyle(
+        backgroundColorHex: navy,
+        fontColorHex: white,
+        bold: true,
+        horizontalAlign: xls.HorizontalAlign.Center,
+        verticalAlign: xls.VerticalAlign.Center,
+        textWrapping: xls.TextWrapping.WrapText,
+        bottomBorder: xls.Border(
+          borderStyle: xls.BorderStyle.Thin,
+          borderColorHex: borderColor,
+        ),
+      );
+    }
+    sheet.setRowHeight(3, 38);
+
+    String postingLabel(String status) => switch (status) {
+          'ready' => 'BISA POSTING',
+          'ordered' => 'BELUM BISA POSTING: masih Ordered',
+          'insufficient' => 'BELUM BISA POSTING: qty melebihi batas',
+          'legacyCombined' => 'BELUM BISA POSTING: data lama menggabungkan beberapa jurnal; impor ulang',
+          _ => 'BELUM BISA POSTING: Receipt Status belum tersedia',
+        };
+    final journalRows = <String, Map<String, dynamic>>{};
+    for (final raw in disposals) {
+      final disposal = Map<String, dynamic>.from(raw as Map);
+      final journals = (disposal['journal']?.toString() ?? '')
+          .split(',')
+          .map((journal) => journal.trim())
+          .where((journal) => journal.isNotEmpty)
+          .toSet()
+          .toList();
+      if (journals.isEmpty) journals.add('');
+      final items = List<dynamic>.from(disposal['items'] ?? []);
+      final statuses = items
+          .map((rawItem) => Map<String, dynamic>.from(rawItem as Map)
+              ['stockStatus']?.toString() ?? 'unknown')
+          .toList();
+      for (final journal in journals) {
+        final journalKey = journal.isEmpty
+            ? 'NO-JOURNAL:${disposal['_id'] ?? disposal['id'] ?? '${disposal['date']}|${disposal['division']}'}'
+            : '${disposal['date']}|${disposal['division']}|${journal.toUpperCase()}';
+        final row = journalRows.putIfAbsent(journalKey, () => {
+              'date': disposal['date']?.toString() ?? '-',
+              'division': disposal['division']?.toString() ?? '-',
+              'journal': journal.isEmpty ? '-' : journal,
+              'statuses': <String>[],
+            });
+        final journalStatuses = row['statuses'] as List<String>;
+        if (journals.length > 1) {
+          journalStatuses.add('legacyCombined');
+        } else if (statuses.isEmpty) {
+          journalStatuses.add(disposal['postingStatus']?.toString() ?? 'unknown');
+        } else {
+          journalStatuses.addAll(statuses);
+        }
+      }
+    }
+
+    var rowIndex = 4;
+    for (final row in journalRows.values) {
+      final statuses = row['statuses'] as List<String>;
+      final status = statuses.isNotEmpty && statuses.every((value) => value == 'ready')
+          ? 'ready'
+          : statuses.contains('legacyCombined')
+              ? 'legacyCombined'
+              : statuses.contains('unknown')
+              ? 'unknown'
+              : statuses.contains('ordered')
+                  ? 'ordered'
+                  : 'insufficient';
+      final background = switch (status) {
+        'ready' => green,
+        'ordered' => blue,
+        'insufficient' => orange,
+        _ => white,
+      };
+      final values = [
+        xls.TextCellValue(row['date'] as String),
+        xls.TextCellValue(row['division'] as String),
+        xls.TextCellValue(row['journal'] as String),
+        xls.TextCellValue(postingLabel(status)),
+      ];
+      for (var column = 0; column < values.length; column++) {
+        final cell = sheet.cell(xls.CellIndex.indexByColumnRow(
+            columnIndex: column, rowIndex: rowIndex));
+        cell.value = values[column];
+        cell.cellStyle = xls.CellStyle(
+          backgroundColorHex: background,
+          verticalAlign: xls.VerticalAlign.Center,
+          horizontalAlign: xls.HorizontalAlign.Left,
+          textWrapping: xls.TextWrapping.WrapText,
+          bottomBorder: xls.Border(
+            borderStyle: xls.BorderStyle.Thin,
+            borderColorHex: borderColor,
+          ),
+        );
+      }
+      sheet.setRowHeight(rowIndex, 28);
+      rowIndex++;
+    }
+    const widths = [14.0, 20.0, 30.0, 42.0];
+    for (var column = 0; column < widths.length; column++) {
+      sheet.setColumnWidth(column, widths[column]);
+    }
+
+    final bytes = workbook.encode();
+    if (bytes == null) return;
+    final fileName =
+        'data_pembuangan_posting_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+    await File('$directoryPath${Platform.pathSeparator}$fileName')
+        .writeAsBytes(bytes);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Excel disimpan: $fileName')));
+  }
   Future<void> _exportAnalysisToExcel(
     List<Map<String, dynamic>> items,
     String dateFrom,
@@ -71,8 +231,7 @@ extension DashboardDisposalExports on _DashboardScreenState {
               item['group']?.toString() ?? '-',
               item['itemNumber']?.toString() ?? '-',
               item['itemName']?.toString() ?? '-',
-              ((item['poBoToIn'] as num?)?.toDouble() ?? 0)
-                  .toStringAsFixed(2),
+              ((item['poBoToIn'] as num?)?.toDouble() ?? 0).toStringAsFixed(2),
               ((item['sales'] as num?)?.toDouble() ?? 0).toStringAsFixed(2),
               ((item['difference'] as num?)?.toDouble() ?? 0)
                   .toStringAsFixed(2),
@@ -118,6 +277,128 @@ extension DashboardDisposalExports on _DashboardScreenState {
     await _savePdfFile(fileName, await pdf.save());
   }
 
+  Future<void> _exportWeeklyDisposalsReport(
+    List<dynamic> disposals,
+    DateTime periodStart,
+    DateTime periodEndExclusive,
+  ) async {
+    final rows = <List<String>>[];
+    var totalQuantity = 0.0;
+    var totalCost = 0.0;
+    final quantityByDivision = <String, double>{};
+    final costByDivision = <String, double>{};
+
+    for (final rawRecord in disposals) {
+      final record = Map<String, dynamic>.from(rawRecord as Map);
+      final date = record['date']?.toString() ?? '-';
+      final division = record['division']?.toString() ?? '-';
+      final items = List<dynamic>.from(record['items'] ?? []);
+      quantityByDivision.putIfAbsent(division, () => 0);
+      costByDivision.putIfAbsent(division, () => 0);
+      if (items.isEmpty) {
+        rows.add([date, division, '-', 'Belum ada detail item', '0', '0.00']);
+        continue;
+      }
+      for (final rawItem in items) {
+        final item = Map<String, dynamic>.from(rawItem as Map);
+        final quantity = ((item['quantity'] as num?)?.toDouble() ?? 0).abs();
+        final cost = (item['costAmount'] as num?)?.toDouble() ?? 0;
+        totalQuantity += quantity;
+        totalCost += cost;
+        quantityByDivision.update(
+          division,
+          (value) => value + quantity,
+        );
+        costByDivision.update(
+          division,
+          (value) => value + cost,
+          ifAbsent: () => cost,
+        );
+        final itemNumber = item['itemNumber']?.toString() ?? '';
+        final productName = item['productName']?.toString() ?? '';
+        rows.add([
+          date,
+          division,
+          itemNumber,
+          productName,
+          NumberFormat('#,##0.##', 'id_ID').format(quantity),
+          NumberFormat('#,##0.00', 'id_ID').format(cost),
+        ]);
+      }
+    }
+
+    final dateFrom = DateFormat('dd-MM-yyyy').format(periodStart);
+    final dateTo = DateFormat('dd-MM-yyyy')
+        .format(periodEndExclusive.subtract(const Duration(days: 1)));
+    final pdf = pw.Document();
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(28),
+        build: (context) => [
+          pw.Text(
+            'Laporan Pembuangan',
+            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text('Periode: $dateFrom sampai $dateTo'),
+          pw.SizedBox(height: 12),
+          pw.Wrap(
+            spacing: 18,
+            runSpacing: 8,
+            children: [
+              pw.Text('Total baris item: ${rows.length}'),
+              pw.Text(
+                  'Total quantity: ${NumberFormat('#,##0.##', 'id_ID').format(totalQuantity)}'),
+              pw.Text(
+                  'Total Cost Amount: Rp ${NumberFormat('#,##0.00', 'id_ID').format(totalCost)}'),
+            ],
+          ),
+          pw.SizedBox(height: 12),
+          if (costByDivision.isNotEmpty) ...[
+            pw.Text('Ringkasan Pembuangan per Divisi',
+                style:
+                    pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 5),
+            pw.TableHelper.fromTextArray(
+              headers: const ['Divisi', 'Total Quantity', 'Cost Amount'],
+              data: quantityByDivision.entries
+                  .map((entry) => [
+                        entry.key,
+                        NumberFormat('#,##0.##', 'id_ID').format(entry.value),
+                        'Rp ${NumberFormat('#,##0.00', 'id_ID').format(costByDivision[entry.key] ?? 0)}',
+                      ])
+                  .toList(),
+              headerStyle:
+                  pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+              cellStyle: const pw.TextStyle(fontSize: 8),
+            ),
+            pw.SizedBox(height: 12),
+          ],
+          pw.TableHelper.fromTextArray(
+            headers: const [
+              'Tanggal',
+              'Divisi',
+              'Item Number',
+              'Nama Barang',
+              'Quantity',
+              'Cost Amount',
+            ],
+            data: rows,
+            headerStyle:
+                pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+            cellStyle: const pw.TextStyle(fontSize: 7),
+            cellAlignment: pw.Alignment.centerLeft,
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+          ),
+        ],
+      ),
+    );
+
+    final fileName = 'laporan_pembuangan_${dateFrom}_sd_$dateTo.pdf';
+    await _savePdfFile(fileName, await pdf.save());
+  }
+
   Future<void> _exportAnalysisProductsToExcel(
     List<Map<String, dynamic>> products,
     String dateFrom,
@@ -150,12 +431,12 @@ extension DashboardDisposalExports on _DashboardScreenState {
       for (var index = 0; index < dates.length; index++) {
         final item = dates[index];
         sheet.appendRow([
-          xls.TextCellValue(index == 0
-              ? product['itemNumber']?.toString() ?? '-'
-              : ''),
+          xls.TextCellValue(
+              index == 0 ? product['itemNumber']?.toString() ?? '-' : ''),
           xls.TextCellValue(
               index == 0 ? product['itemName']?.toString() ?? '-' : ''),
-          xls.TextCellValue(index == 0 ? product['unit']?.toString() ?? '-' : ''),
+          xls.TextCellValue(
+              index == 0 ? product['unit']?.toString() ?? '-' : ''),
           index == 0
               ? xls.DoubleCellValue(
                   (product['totalDifference'] as num?)?.toDouble() ?? 0)
@@ -347,6 +628,51 @@ extension DashboardDisposalExports on _DashboardScreenState {
           ...content,
         ],
       ));
+
+      final photos = List<String>.from(disposal['photos'] ?? []);
+      for (var photoIndex = 0; photoIndex < photos.length; photoIndex++) {
+        final photo = await _loadPdfImage(photos[photoIndex]);
+        if (photo == null) continue;
+
+        final savedTurns = _photoQuarterTurns[photos[photoIndex]] ??
+            _storedPhotoRotation(disposal, photos[photoIndex]);
+        final portraitAfterSavedRotation = photo.isPortrait != savedTurns.isOdd;
+        final turns = (savedTurns + (portraitAfterSavedRotation ? 1 : 0)) % 4;
+        pdf.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat.a4.landscape,
+            margin: const pw.EdgeInsets.all(28),
+            build: (context) => pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                        'Foto Pembuangan ${photoIndex + 1} dari ${photos.length}',
+                        style: pw.TextStyle(
+                            fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                        '${disposal['division'] ?? '-'} - ${disposal['date'] ?? '-'}',
+                        style: const pw.TextStyle(fontSize: 10)),
+                  ],
+                ),
+                pw.SizedBox(height: 10),
+                pw.Expanded(
+                  child: pw.Center(
+                    child: _rotatedPdfImage(
+                      photo.image,
+                      turns,
+                      width: PdfPageFormat.a4.landscape.width - 56,
+                      height: PdfPageFormat.a4.landscape.height - 96,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
     }
     return pdf;
   }
@@ -380,12 +706,76 @@ extension DashboardDisposalExports on _DashboardScreenState {
   Future<List<pw.Widget>> _buildPdfDisposalContent(
       Map<String, dynamic> disposal, int number) async {
     final summaryCard = await _buildPdfDisposalCard(disposal, number);
-    final scannedPdf = disposal['scannedPdf']?.toString() ?? '';
-    final scannedPages = await _loadScannedPdfPageImages(scannedPdf);
+    final movementItems = List<dynamic>.from(disposal['items'] ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    final scannedPdfs = List<String>.from(
+      disposal['scannedPdfs'] ??
+          (disposal['scannedPdf'] == null
+              ? <String>[]
+              : [disposal['scannedPdf'].toString()]),
+    );
+    final scannedPages = <pw.MemoryImage>[];
+    for (final scannedPdf in scannedPdfs) {
+      scannedPages.addAll(await _loadScannedPdfPageImages(scannedPdf));
+    }
 
     return [
       summaryCard,
-      if (scannedPdf.trim().isNotEmpty) ...[
+      pw.SizedBox(height: 14),
+      _pdfSectionTitle('Data Movement (${movementItems.length} item)'),
+      pw.SizedBox(height: 8),
+      if (movementItems.isEmpty)
+        pw.Text(
+          'Belum ada data Movement untuk data pembuangan ini.',
+          style: const pw.TextStyle(
+              fontSize: 10, color: PdfColor(0.45, 0.49, 0.55)),
+        )
+      else
+        pw.TableHelper.fromTextArray(
+          headers: const [
+            'No.',
+            'Item Number',
+            'Product Name',
+            'Quantity',
+            'Offset Account',
+          ],
+          data: [
+            for (var itemIndex = 0;
+                itemIndex < movementItems.length;
+                itemIndex++)
+              [
+                '${itemIndex + 1}',
+                movementItems[itemIndex]['itemNumber']?.toString() ?? '-',
+                movementItems[itemIndex]['productName']?.toString() ?? '-',
+                movementItems[itemIndex]['quantity']?.toString() ?? '-',
+                movementItems[itemIndex]['offsetAccount']?.toString() ?? '-',
+              ],
+          ],
+          border: pw.TableBorder.all(
+              color: const PdfColor(0.82, 0.85, 0.89), width: 0.6),
+          headerDecoration:
+              const pw.BoxDecoration(color: PdfColor(0.91, 0.95, 1.00)),
+          headerStyle: pw.TextStyle(
+            fontSize: 8,
+            fontWeight: pw.FontWeight.bold,
+            color: const PdfColor(0.10, 0.18, 0.30),
+          ),
+          cellStyle: const pw.TextStyle(
+              fontSize: 7.5, color: PdfColor(0.20, 0.24, 0.30)),
+          cellPadding:
+              const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+          cellAlignment: pw.Alignment.centerLeft,
+          columnWidths: const {
+            0: pw.FixedColumnWidth(28),
+            1: pw.FlexColumnWidth(1.15),
+            2: pw.FlexColumnWidth(2.4),
+            3: pw.FlexColumnWidth(0.9),
+            4: pw.FlexColumnWidth(1.2),
+          },
+        ),
+      if (scannedPdfs.isNotEmpty) ...[
         if (scannedPages.isNotEmpty) pw.NewPage(),
         _pdfSectionTitle('Preview Scan PDF'),
         pw.SizedBox(height: 8),
@@ -448,36 +838,6 @@ extension DashboardDisposalExports on _DashboardScreenState {
   Future<pw.Widget> _buildPdfDisposalCard(
       Map<String, dynamic> disposal, int number) async {
     final photos = List<String>.from(disposal['photos'] ?? []);
-    final photoWidgets = <pw.Widget>[];
-
-    for (final photo in photos.take(4)) {
-      final image = await _loadPdfImage(photo);
-      if (image == null) continue;
-      final turns = _photoQuarterTurns[photo] ?? _storedPhotoRotation(disposal, photo);
-      photoWidgets.add(
-        pw.Container(
-          width: _pdfPhotoWidth,
-          height: _pdfPhotoHeight,
-          padding: const pw.EdgeInsets.all(_pdfPhotoPadding),
-          decoration: pw.BoxDecoration(
-            color: const PdfColor(0.98, 0.98, 0.98),
-            border: pw.Border.all(color: const PdfColor(0.86, 0.88, 0.90)),
-            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-          ),
-          child: pw.ClipRRect(
-            horizontalRadius: 4,
-            verticalRadius: 4,
-            child: _rotatedPdfImage(
-              image,
-              turns,
-              width: _pdfPhotoWidth - (_pdfPhotoPadding * 2),
-              height: _pdfPhotoHeight - (_pdfPhotoPadding * 2),
-            ),
-          ),
-        ),
-      );
-    }
-    final hiddenPhotoCount = photos.length - photoWidgets.length;
 
     return pw.Container(
       padding: const pw.EdgeInsets.all(14),
@@ -538,24 +898,13 @@ extension DashboardDisposalExports on _DashboardScreenState {
           pw.SizedBox(height: 12),
           _pdfSectionTitle('Foto Dokumentasi'),
           pw.SizedBox(height: 8),
-          if (photoWidgets.isEmpty)
-            pw.Text('Tidak ada foto yang dapat dimuat.',
-                style: const pw.TextStyle(
-                    fontSize: 10, color: PdfColor(0.45, 0.49, 0.55)))
-          else
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Wrap(spacing: 8, runSpacing: 8, children: photoWidgets),
-                if (hiddenPhotoCount > 0) ...[
-                  pw.SizedBox(height: 6),
-                  pw.Text(
-                      '+$hiddenPhotoCount foto lainnya tersimpan di data pembuangan.',
-                      style: const pw.TextStyle(
-                          fontSize: 9, color: PdfColor(0.45, 0.49, 0.55))),
-                ],
-              ],
-            ),
+          pw.Text(
+            photos.isEmpty
+                ? 'Tidak ada foto dokumentasi.'
+                : '${photos.length} foto dokumentasi. Setiap foto dicetak pada halaman landscape tersendiri.',
+            style: const pw.TextStyle(
+                fontSize: 10, color: PdfColor(0.35, 0.39, 0.45)),
+          ),
         ],
       ),
     );
@@ -599,7 +948,7 @@ extension DashboardDisposalExports on _DashboardScreenState {
     try {
       final bytes = await _loadNetworkFile(_storageUrl(relativePath));
       final pages = <pw.MemoryImage>[];
-      await for (final page in Printing.raster(bytes, dpi: 110)) {
+      await for (final page in Printing.raster(bytes, dpi: 90)) {
         pages.add(pw.MemoryImage(await page.toPng()));
       }
       return pages;
@@ -608,13 +957,22 @@ extension DashboardDisposalExports on _DashboardScreenState {
     }
   }
 
-  Future<pw.MemoryImage?> _loadPdfImage(String relativePath) async {
+  Future<({pw.MemoryImage image, bool isPortrait})?> _loadPdfImage(
+      String relativePath) async {
     try {
       final response = await http.get(Uri.parse(_storageUrl(relativePath)));
       if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
         return null;
       }
-      return pw.MemoryImage(response.bodyBytes);
+      final codec = await ui.instantiateImageCodec(response.bodyBytes);
+      final frame = await codec.getNextFrame();
+      final isPortrait = frame.image.height > frame.image.width;
+      frame.image.dispose();
+      codec.dispose();
+      return (
+        image: pw.MemoryImage(response.bodyBytes),
+        isPortrait: isPortrait
+      );
     } catch (_) {
       return null;
     }
@@ -630,7 +988,7 @@ extension DashboardDisposalExports on _DashboardScreenState {
     final picture = pw.SizedBox(
       width: normalizedTurns.isOdd ? height : width,
       height: normalizedTurns.isOdd ? width : height,
-            child: pw.Image(image, fit: pw.BoxFit.contain),
+      child: pw.Image(image, fit: pw.BoxFit.contain),
     );
     if (normalizedTurns == 0) return picture;
     return pw.Center(
@@ -681,7 +1039,7 @@ extension DashboardDisposalExports on _DashboardScreenState {
         maxWidth: 430,
         child: const Text(
           'Apakah Anda yakin ingin menghapus data pembuangan ini?',
-          style: TextStyle(color: Color(0xFF68777A), height: 1.35),
+          style: TextStyle(color: AppTheme.textSecondary, height: 1.35),
         ),
         actions: [
           TextButton(

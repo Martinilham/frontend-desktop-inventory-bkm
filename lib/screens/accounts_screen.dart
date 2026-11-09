@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:inventory_bkm_desktop/theme/app_theme.dart';
 import 'package:inventory_bkm_desktop/services/api_service.dart';
 import 'package:inventory_bkm_desktop/widgets/desktop_modal_shell.dart';
 import 'package:inventory_bkm_desktop/widgets/primary_button.dart';
@@ -155,7 +156,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                     title: const Text('Akun aktif'),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
-                    tileColor: const Color(0xFFF5F7EF),
+                    tileColor: AppTheme.tableHeader,
                     value: _isActive,
                     onChanged: (value) => setState(() => _isActive = value),
                   ),
@@ -219,7 +220,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                     title: const Text('Akun aktif'),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
-                    tileColor: const Color(0xFFF5F7EF),
+                    tileColor: AppTheme.tableHeader,
                     value: isActive,
                     onChanged: (value) =>
                         setDialogState(() => isActive = value),
@@ -333,7 +334,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                       style:
                           Theme.of(context).textTheme.headlineMedium?.copyWith(
                                 fontSize: 32,
-                                color: const Color(0xFF1D2B38),
+                                color: AppTheme.textPrimary,
                               ),
                     ),
                   ),
@@ -389,13 +390,13 @@ class _AccountsScreenState extends State<AccountsScreen> {
           children: [
             CircleAvatar(
               radius: 22,
-              backgroundColor: const Color(0xFF2E7D32).withOpacity(0.14),
+              backgroundColor: AppTheme.primary.withOpacity(0.14),
               child: Text(
                 (user['username']?.toString().isNotEmpty ?? false)
                     ? user['username'].toString()[0].toUpperCase()
                     : '?',
                 style: const TextStyle(
-                    color: Color(0xFF2E7D32), fontWeight: FontWeight.w800),
+                    color: AppTheme.primary, fontWeight: FontWeight.w800),
               ),
             ),
             const SizedBox(width: 14),
@@ -406,12 +407,12 @@ class _AccountsScreenState extends State<AccountsScreen> {
                   Text(user['username']?.toString() ?? '-',
                       style: const TextStyle(
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFF1D2B38))),
+                          color: AppTheme.textPrimary)),
                   const SizedBox(height: 4),
                   Text(user['phoneNumber']?.toString().trim().isEmpty ?? true
                       ? 'Nomor HP belum diisi'
                       : user['phoneNumber'].toString(),
-                      style: const TextStyle(color: Color(0xFF68777A))),
+                      style: const TextStyle(color: AppTheme.textSecondary)),
                 ],
               ),
             ),
@@ -422,10 +423,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            _buildAccountBadge(role, const Color(0xFF2E7D32)),
+            _buildAccountBadge(role, AppTheme.primary),
             _buildAccountBadge(
               isActive ? 'AKTIF' : 'NONAKTIF',
-              isActive ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+              isActive ? AppTheme.primary : const Color(0xFFC62828),
             ),
             IconButton(
                 tooltip: 'Edit',
@@ -444,7 +445,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE5EBDD)),
+            border: Border.all(color: AppTheme.border),
           ),
           child: isNarrow
               ? Column(

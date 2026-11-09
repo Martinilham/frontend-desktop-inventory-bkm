@@ -29,7 +29,15 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
     List<String> newPhotoPaths = [];
     final existingPhotos = List<String>.from(disposal['photos'] ?? []);
     final removePhotoPaths = <String>{};
-    String? newScannedPdfPath;
+    List<String> newScannedPdfPaths = [];
+    final existingScannedPdfs = List<String>.from(
+      disposal['scannedPdfs'] ??
+          (disposal['scannedPdf'] == null
+              ? <String>[]
+              : [disposal['scannedPdf'].toString()]),
+    );
+    final removeScannedPdfPaths = <String>{};
+    String? previewNewScannedPdfPath;
     var isSaving = false;
 
     try {
@@ -134,25 +142,41 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                                 : () async {
                                     final result =
                                         await FilePicker.platform.pickFiles(
+                                      allowMultiple: true,
                                       type: FileType.custom,
                                       allowedExtensions: ['pdf'],
                                     );
-                                    if (result == null ||
+                                    if (!mounted ||
+                                        result == null ||
                                         result.paths
                                             .whereType<String>()
                                             .isEmpty) {
                                       return;
                                     }
+                                    final pickedPaths =
+                                        result.paths.whereType<String>();
+                                    final combinedPaths = {
+                                      ...newScannedPdfPaths,
+                                      ...pickedPaths,
+                                    }.toList();
+                                    if (combinedPaths.length > 20) {
+                                      ScaffoldMessenger.of(this.context)
+                                          .showSnackBar(const SnackBar(
+                                        content: Text(
+                                            'Maksimal 20 PDF baru per penyimpanan Edit.'),
+                                      ));
+                                      return;
+                                    }
                                     setDialogState(() {
-                                      newScannedPdfPath = result.paths
-                                          .whereType<String>()
-                                          .first;
+                                      newScannedPdfPaths = combinedPaths;
+                                      previewNewScannedPdfPath ??=
+                                          pickedPaths.first;
                                     });
                                   },
                             icon: const Icon(Icons.picture_as_pdf_outlined),
-                            label: Text(newScannedPdfPath == null
+                            label: Text(newScannedPdfPaths.isEmpty
                                 ? 'Tambah PDF'
-                                : 'PDF baru siap'),
+                                : '${newScannedPdfPaths.length} PDF baru'),
                           ),
                         ),
                       ],
@@ -165,14 +189,14 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                           'Foto tersimpan',
                           style:
                               Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: const Color(0xFF1D2B38),
+                                    color: AppTheme.textPrimary,
                                     fontWeight: FontWeight.w800,
                                   ),
                         ),
                       ),
                       const SizedBox(height: 10),
                       SizedBox(
-                        height: 136,
+                        height: 168,
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           itemCount: existingPhotos.length,
@@ -187,8 +211,8 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                                   opacity: marked ? 0.35 : 1,
                                   child: LandscapeImageFrame(
                                     imageUrl: _storageUrl(photo),
-                                    width: 190,
-                                    height: 108,
+                                    width: 250,
+                                    height: 140,
                                     onTap: () => _showImagePreview(
                                       context,
                                       'Foto ${index + 1}',
@@ -232,9 +256,97 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                         ),
                       ),
                     ],
-                    if (newScannedPdfPath != null) ...[
+                    if (existingScannedPdfs.isNotEmpty) ...[
                       const SizedBox(height: 12),
-                      _buildLocalPdfPreviewBox(newScannedPdfPath!),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'PDF tersimpan',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AppTheme.textPrimary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      ...existingScannedPdfs.map((pdfPath) {
+                        final marked = removeScannedPdfPaths.contains(pdfPath);
+                        final fileName =
+                            Uri.decodeComponent(pdfPath.split('/').last);
+                        return Opacity(
+                          opacity: marked ? 0.4 : 1,
+                          child: Card(
+                            child: ListTile(
+                              leading:
+                                  const Icon(Icons.picture_as_pdf_outlined),
+                              title: Text(fileName,
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                              onTap: marked
+                                  ? null
+                                  : () => _showPdfPreviewDialog(
+                                      _storageUrl(pdfPath)),
+                              trailing: IconButton(
+                                tooltip:
+                                    marked ? 'Batalkan hapus' : 'Hapus PDF',
+                                onPressed: () => setDialogState(() {
+                                  if (marked) {
+                                    removeScannedPdfPaths.remove(pdfPath);
+                                  } else {
+                                    removeScannedPdfPaths.add(pdfPath);
+                                  }
+                                }),
+                                icon: Icon(
+                                    marked ? Icons.undo : Icons.delete_outline),
+                                color: marked ? Colors.green : Colors.red,
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                    if (newScannedPdfPaths.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'PDF baru dipilih',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AppTheme.textPrimary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                        ),
+                      ),
+                      ...newScannedPdfPaths.asMap().entries.map((entry) =>
+                          ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.picture_as_pdf_outlined),
+                            title: Text(File(entry.value).uri.pathSegments.last,
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                            onTap: () => setDialogState(
+                                () => previewNewScannedPdfPath = entry.value),
+                            trailing: IconButton(
+                              tooltip: 'Hapus dari pilihan',
+                              onPressed: () => setDialogState(() {
+                                newScannedPdfPaths =
+                                    List<String>.from(newScannedPdfPaths)
+                                      ..removeAt(entry.key);
+                                if (!newScannedPdfPaths
+                                    .contains(previewNewScannedPdfPath)) {
+                                  previewNewScannedPdfPath =
+                                      newScannedPdfPaths.isEmpty
+                                          ? null
+                                          : newScannedPdfPaths.first;
+                                }
+                              }),
+                              icon: const Icon(Icons.delete_outline),
+                            ),
+                          )),
+                      if (previewNewScannedPdfPath != null) ...[
+                        const SizedBox(height: 8),
+                        _buildLocalPdfPreviewBox(previewNewScannedPdfPath!),
+                      ],
                     ],
                     if (newPhotoPaths.isNotEmpty) ...[
                       const SizedBox(height: 12),
@@ -244,7 +356,7 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                           'Preview Foto Baru',
                           style:
                               Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: const Color(0xFF1D2B38),
+                                    color: AppTheme.textPrimary,
                                     fontWeight: FontWeight.w800,
                                   ),
                         ),
@@ -282,8 +394,9 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                             date: selectedDate,
                             journal: journalController.text,
                             photoPaths: newPhotoPaths,
-                            scannedPdfPath: newScannedPdfPath,
+                            scannedPdfPaths: newScannedPdfPaths,
                             removePhotos: removePhotoPaths.toList(),
+                            removeScannedPdfs: removeScannedPdfPaths.toList(),
                           );
                           if (!mounted) return;
                           Navigator.of(context).pop(result);
@@ -331,7 +444,7 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
       builder: (context) => StatefulBuilder(
         builder: (context, setDetailState) => DesktopModalShell(
           title: 'Detail Data Pembuangan',
-          subtitle: 'Dokumentasi, jurnal, dan file pendukung',
+          subtitle: 'Daftar item, dokumentasi, jurnal, dan file pendukung',
           icon: Icons.description_outlined,
           maxWidth: 1200,
           child: ConstrainedBox(
@@ -350,6 +463,8 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                           detailData['description']?.toString() ??
                           '-'),
                   const SizedBox(height: 16),
+                  _buildDisposalItemsTable(detailData),
+                  const SizedBox(height: 20),
                   _buildDisposalDocumentationPreview(detailData),
                   const SizedBox(height: 12),
                   _buildDetailRow('Uploaded By',
@@ -411,9 +526,113 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
     );
   }
 
+  Widget _buildDisposalItemsTable(Map<String, dynamic> disposal) {
+    final items = List<dynamic>.from(disposal['items'] ?? [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    final totalCostAmount = items.fold<double>(
+      0,
+      (total, item) => total + ((item['costAmount'] as num?)?.toDouble() ?? 0),
+    );
+    final costFormatter = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 2,
+    );
+    final quantityFormatter = NumberFormat('#,##0.##', 'id_ID');
+    if (items.isEmpty) {
+      return const Text('Belum ada detail item. Import Excel untuk melengkapi '
+          'data pembuangan pada tanggal dan kategori ini.');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Barang yang Dibuang (${items.length} item)',
+            style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
+        Text(
+          'Total Cost Amount: ${costFormatter.format(totalCostAmount)}',
+          style: const TextStyle(
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Receipt Status dihitung sesuai kondisi sampai tanggal jurnal ${disposal['date']?.toString() ?? '-'}; qty sisa = Purchased/Received sampai tanggal tersebut dikurangi qty jurnal ini.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.black54,
+              ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: math.min(360.0, 58.0 + items.length * 56.0),
+          child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                dataRowMinHeight: 48,
+                dataRowMaxHeight: 72,
+                columns: const [
+                  DataColumn(label: Text('Item number')),
+                  DataColumn(label: Text('Product name')),
+                  DataColumn(label: Text('Warehouse')),
+                  DataColumn(label: Text('Quantity'), numeric: true),
+                  DataColumn(label: Text('Purchased / Received'), numeric: true),
+                  DataColumn(label: Text('Ordered'), numeric: true),
+                  DataColumn(label: Text('Sisa'), numeric: true),
+                  DataColumn(label: Text('Status')),
+                  DataColumn(label: Text('Cost Amount'), numeric: true),
+                  DataColumn(label: Text('Offset account')),
+                ],
+                rows: items
+                    .map((item) => DataRow(cells: [
+                          DataCell(SelectableText(
+                              item['itemNumber']?.toString() ?? '-')),
+                          DataCell(SizedBox(
+                              width: 360,
+                              child: Text(
+                                  item['productName']?.toString() ?? '-'))),
+                          DataCell(Text(item['warehouse']?.toString() ?? '-')),
+                          DataCell(Text(quantityFormatter.format(
+                              ((item['quantity'] as num?)?.toDouble() ??
+                                      double.tryParse(item['quantity']?.toString() ?? '') ??
+                                      0)
+                                  .abs()))),
+                          DataCell(Text(item['purchasedQuantity'] == null
+                              ? '-'
+                              : quantityFormatter.format(
+                                  item['purchasedQuantity']))),
+                          DataCell(Text(quantityFormatter.format(
+                              (item['orderedQuantity'] as num?)?.toDouble() ?? 0))),
+                          DataCell(Text(item['remainingQuantity'] == null
+                              ? '-'
+                              : quantityFormatter.format(item['remainingQuantity']))),
+                          DataCell(_disposalPostingStatusBadge({
+                            'postingStatus': item['stockStatus'] ?? 'unknown',
+                          })),
+                          DataCell(Text(costFormatter.format(
+                              (item['costAmount'] as num?)?.toDouble() ?? 0))),
+                          DataCell(SelectableText(
+                              item['offsetAccount']?.toString() ?? '-')),
+                        ]))
+                    .toList(),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildDisposalDocumentationPreview(Map<String, dynamic> disposal) {
     final photos = List<String>.from(disposal['photos'] ?? []);
-    final scannedPdf = disposal['scannedPdf']?.toString() ?? '';
+    final scannedPdfs = List<String>.from(
+      disposal['scannedPdfs'] ??
+          (disposal['scannedPdf'] == null
+              ? <String>[]
+              : [disposal['scannedPdf'].toString()]),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -435,7 +654,7 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
           )
         else
           SizedBox(
-            height: 164,
+            height: 224,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: photos.length,
@@ -458,7 +677,7 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                 .titleSmall
                 ?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 10),
-        if (scannedPdf.trim().isEmpty)
+        if (scannedPdfs.isEmpty)
           Container(
             height: 86,
             alignment: Alignment.center,
@@ -468,13 +687,25 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
             child: const Text('Belum ada PDF scan.'),
           )
         else
-          _buildPdfPreviewBox(scannedPdf),
+          ...scannedPdfs.asMap().entries.map((entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(Uri.decodeComponent(entry.value.split('/').last)),
+                    const SizedBox(height: 6),
+                    _buildPdfPreviewBox(entry.value),
+                  ],
+                ),
+              )),
       ],
     );
   }
 
   Widget _buildPdfPreviewBox(String relativePath) {
     final pdfUrl = _storageUrl(relativePath);
+    final pdfBytes = _disposalPdfBytesCache.putIfAbsent(
+        pdfUrl, () => _loadNetworkFile(pdfUrl));
 
     return Container(
       height: 260,
@@ -484,7 +715,7 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
       ),
       clipBehavior: Clip.antiAlias,
       child: FutureBuilder<Uint8List>(
-        future: _loadNetworkFile(pdfUrl),
+        future: pdfBytes,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -515,8 +746,8 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
     required String title,
   }) {
     return SizedBox(
-      width: 224,
-      height: 164,
+      width: 320,
+      height: 216,
       child: ValueListenableBuilder<int>(
         valueListenable: _photoRotationVersion,
         builder: (context, _, __) {
@@ -525,8 +756,8 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
             children: [
               LandscapeImageFrame(
                 imageUrl: imageUrl,
-                width: 224,
-                height: 126,
+                width: 320,
+                height: 180,
                 quarterTurns: turns,
                 onTap: () => _showImagePreview(context, title, imageUrl,
                     quarterTurns: turns),
@@ -604,9 +835,10 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
     final photos = List<String>.from(disposal['photos'] ?? []);
     return {
       for (final photo in photos)
-        photo: ((_photoQuarterTurns[photo] ?? _storedPhotoRotation(disposal, photo)) %
-                4 +
-            4) %
+        photo: ((_photoQuarterTurns[photo] ??
+                        _storedPhotoRotation(disposal, photo)) %
+                    4 +
+                4) %
             4,
     };
   }
@@ -681,6 +913,8 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
   }
 
   Widget _buildLocalPdfPreviewBox(String path) {
+    final pdfBytes = _disposalPdfBytesCache.putIfAbsent(
+        'local:$path', () => File(path).readAsBytes());
     return Container(
       height: 220,
       decoration: BoxDecoration(
@@ -689,7 +923,7 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
       ),
       clipBehavior: Clip.antiAlias,
       child: FutureBuilder<Uint8List>(
-        future: File(path).readAsBytes(),
+        future: pdfBytes,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -710,44 +944,82 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
 
   Widget _buildPdfRasterPreview(Uint8List bytes,
       {required VoidCallback onOpen}) {
+    final pageStream = _rasterizePdfPagesStream(bytes, maxPages: 4, dpi: 60);
+    final rotations = <int, int>{};
     return Stack(
       children: [
-        FutureBuilder<List<Uint8List>>(
-          future: _rasterizePdfPages(bytes, maxPages: 4, dpi: 90),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError ||
-                !snapshot.hasData ||
-                snapshot.data!.isEmpty) {
-              return const Center(child: Text('Gagal menampilkan isi PDF'));
-            }
-
-            final pages = snapshot.data!;
-            return ListView.separated(
-              padding: const EdgeInsets.all(12),
-              scrollDirection: Axis.horizontal,
-              itemCount: pages.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (context, index) => InkWell(
-                onTap: onOpen,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.black12),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.memory(
-                      pages[index],
-                      width: 150,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-              ),
+        StatefulBuilder(
+          builder: (context, setState) {
+            return StreamBuilder<List<Uint8List>>(
+              stream: pageStream,
+              initialData: const [],
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const Center(child: Text('Gagal menampilkan isi PDF'));
+                }
+                final pages = snapshot.data ?? const <Uint8List>[];
+                if (pages.isEmpty &&
+                    snapshot.connectionState == ConnectionState.done) {
+                  return const Center(child: Text('PDF tidak memiliki halaman'));
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: pages.length +
+                      (snapshot.connectionState == ConnectionState.done ? 0 : 1),
+                  itemBuilder: (context, index) {
+                    if (index >= pages.length) {
+                      return const SizedBox(
+                        width: 150,
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    final turns = rotations[index] ?? 0;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Column(
+                        children: [
+                          Row(mainAxisSize: MainAxisSize.min, children: [
+                            IconButton(
+                              tooltip: 'Rotate kiri',
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => setState(() => rotations[index] = (turns + 3) % 4),
+                              icon: const Icon(Icons.rotate_left, size: 18),
+                            ),
+                            Text('Hal. ${index + 1}'),
+                            IconButton(
+                              tooltip: 'Rotate kanan',
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => setState(() => rotations[index] = (turns + 1) % 4),
+                              icon: const Icon(Icons.rotate_right, size: 18),
+                            ),
+                          ]),
+                          Expanded(
+                            child: InkWell(
+                              onTap: onOpen,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.black12),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: RotatedBox(
+                                    quarterTurns: turns,
+                                    child: Image.memory(pages[index],
+                                        width: 150, fit: BoxFit.contain),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
             );
           },
         ),
@@ -764,14 +1036,14 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
     );
   }
 
-  Future<List<Uint8List>> _rasterizePdfPages(Uint8List bytes,
-      {required int maxPages, required double dpi}) async {
+  Stream<List<Uint8List>> _rasterizePdfPagesStream(Uint8List bytes,
+      {required int maxPages, required double dpi}) async* {
     final pages = <Uint8List>[];
     await for (final page in Printing.raster(bytes, dpi: dpi)) {
       pages.add(await page.toPng());
+      yield List<Uint8List>.unmodifiable(pages);
       if (pages.length >= maxPages) break;
     }
-    return pages;
   }
 
   Future<Uint8List> _loadNetworkFile(String url) async {
@@ -829,43 +1101,77 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
   }
 
   Widget _buildFullPdfRasterView(Uint8List bytes) {
-    return FutureBuilder<List<Uint8List>>(
-      future: _rasterizePdfPages(bytes, maxPages: 40, dpi: 120),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text('Gagal menampilkan isi PDF'));
-        }
-
-        final pages = snapshot.data!;
-        return ListView.separated(
-          padding: const EdgeInsets.all(18),
-          itemCount: pages.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 18),
-          itemBuilder: (context, index) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Halaman ${index + 1}',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Center(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black12),
-                  ),
-                  child: Image.memory(
-                    pages[index],
-                    fit: BoxFit.contain,
-                  ),
+    final pageStream = _rasterizePdfPagesStream(bytes, maxPages: 40, dpi: 80);
+    final rotations = <int, int>{};
+    return StatefulBuilder(
+      builder: (context, setState) => StreamBuilder<List<Uint8List>>(
+        stream: pageStream,
+        initialData: const [],
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Center(child: Text('Gagal menampilkan isi PDF'));
+          }
+          final pages = snapshot.data ?? const <Uint8List>[];
+          if (pages.isEmpty && snapshot.connectionState == ConnectionState.done) {
+            return const Center(child: Text('PDF tidak memiliki halaman'));
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(18),
+            itemCount: pages.length +
+                (snapshot.connectionState == ConnectionState.done ? 0 : 1),
+            itemBuilder: (context, index) {
+              if (index >= pages.length) {
+                return const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final turns = rotations[index] ?? 0;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                        child: Text('Halaman ${index + 1}',
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      IconButton(
+                        tooltip: 'Rotate kiri',
+                        onPressed: () => setState(() => rotations[index] = (turns + 3) % 4),
+                        icon: const Icon(Icons.rotate_left),
+                      ),
+                      IconButton(
+                        tooltip: 'Rotate kanan',
+                        onPressed: () => setState(() => rotations[index] = (turns + 1) % 4),
+                        icon: const Icon(Icons.rotate_right),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.black12),
+                        ),
+                        child: InteractiveViewer(
+                          minScale: 0.5,
+                          maxScale: 5,
+                          child: RotatedBox(
+                            quarterTurns: turns,
+                            child: Image.memory(pages[index], fit: BoxFit.contain),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 

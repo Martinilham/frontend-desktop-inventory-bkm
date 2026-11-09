@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:inventory_bkm_desktop/theme/app_theme.dart';
 import 'package:inventory_bkm_desktop/services/api_service.dart';
 import 'package:inventory_bkm_desktop/widgets/primary_button.dart';
 
@@ -54,7 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFFAFBF7), Color(0xFFF5F7EF)],
+            colors: [AppTheme.background, AppTheme.tableHeader],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -65,7 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
               left: -160,
               top: 240,
               child: _SoftShape(
-                color: Color(0x668CC63F),
+                color: Color(0x66249A4A),
                 width: 620,
                 height: 260,
                 angle: -0.18,
@@ -75,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
               right: -120,
               top: -80,
               child: _SoftShape(
-                color: Color(0x55FFB74D),
+                color: Color(0x55F5823A),
                 width: 640,
                 height: 360,
                 angle: 0.18,
@@ -85,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
               right: 260,
               bottom: -220,
               child: _SoftShape(
-                color: Color(0x66F5F7EF),
+                color: Color(0x66EEF7F1),
                 width: 520,
                 height: 300,
                 angle: 0.24,
@@ -130,7 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 .textTheme
                                 .titleMedium
                                 ?.copyWith(
-                                  color: const Color(0xFF68777A),
+                                  color: AppTheme.textSecondary,
                                   fontWeight: FontWeight.w600,
                                 ),
                           ),
@@ -149,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     .textTheme
                                     .titleMedium
                                     ?.copyWith(
-                                      color: const Color(0xFF68777A),
+                                      color: AppTheme.textSecondary,
                                       fontWeight: FontWeight.w700,
                                     ),
                               ),
@@ -160,7 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     .textTheme
                                     .titleMedium
                                     ?.copyWith(
-                                      color: const Color(0xFF68777A),
+                                      color: AppTheme.textSecondary,
                                       fontWeight: FontWeight.w700,
                                     ),
                               ),
@@ -192,7 +193,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     .textTheme
                                     .titleMedium
                                     ?.copyWith(
-                                      color: const Color(0xFF68777A),
+                                      color: AppTheme.textSecondary,
                                       fontWeight: FontWeight.w700,
                                     ),
                               ),
@@ -231,7 +232,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Text(
           label,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: const Color(0xFF68777A),
+                color: AppTheme.textSecondary,
                 fontWeight: FontWeight.w700,
               ),
         ),

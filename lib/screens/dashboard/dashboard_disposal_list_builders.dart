@@ -45,7 +45,7 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
                             onChanged: (_) => setDialogState(() {}),
                             decoration: InputDecoration(
                               hintText:
-                                  'Cari divisi, tanggal, jurnal, uploader...',
+                                  'Cari item number, nama barang, divisi, tanggal...',
                               prefixIcon: const Icon(Icons.search),
                               suffixIcon: searchQuery.isEmpty
                                   ? null
@@ -117,8 +117,11 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
                                   crossAxisCount: crossAxisCount,
                                   crossAxisSpacing: 16,
                                   mainAxisSpacing: 16,
-                                  childAspectRatio:
-                                      crossAxisCount == 1 ? 3.05 : 2.45,
+                                  childAspectRatio: switch (crossAxisCount) {
+                                    1 => 3.05,
+                                    2 => 2.35,
+                                    _ => 2.1,
+                                  },
                                 ),
                                 itemCount: visibleItems.length,
                                 itemBuilder: (context, index) =>
@@ -141,7 +144,12 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
                   isLoading: _isExportingPdf,
                   onPressed: _isExportingPdf
                       ? null
-                      : () => _exportFilteredDisposalsToPdf(visibleItems),
+                      : () => _exportFilteredDisposalsToPdf(
+                            visibleItems.expand((item) {
+                              final records = item['_groupedDisposals'];
+                              return records is List ? records : [item];
+                            }).cast<Map<String, dynamic>>().toList(),
+                          ),
                 ),
               ),
             ],
@@ -157,7 +165,7 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
     final end = DateTime(_filterEndDate!.year, _filterEndDate!.month,
         _filterEndDate!.day, 23, 59, 59);
 
-    return disposals.where((item) {
+    final filtered = disposals.where((item) {
       final map = item as Map<String, dynamic>;
       final dateString = map['date']?.toString() ?? '';
       final date = DateTime.tryParse(dateString);
@@ -170,18 +178,53 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
           map['division']?.toString().toLowerCase() ==
               filterDivision.toLowerCase();
       return matchesDate && matchesDivision;
+    }).cast<Map<String, dynamic>>().toList();
+    return _groupDisposalsByDateDivision(filtered);
+  }
+
+  List<Map<String, dynamic>> _groupDisposalsByDateDivision(
+      List<Map<String, dynamic>> records) {
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final record in records) {
+      final date = (record['date']?.toString() ?? '').split('T').first;
+      final division = (record['division']?.toString() ?? '').trim();
+      final key = '${date.toLowerCase()}|${division.toLowerCase()}';
+      groups.putIfAbsent(key, () => []).add(record);
+    }
+
+    return groups.values.map((group) {
+      if (group.length == 1) return group.first;
+      final journals = group
+          .map((record) => (record['journal']?.toString() ?? '').trim())
+          .where((journal) => journal.isNotEmpty)
+          .toSet()
+          .toList();
+      return <String, dynamic>{
+        '_groupedDisposals': group,
+        'date': group.first['date'],
+        'division': group.first['division'],
+        'journal': journals.isEmpty ? '' : journals.join(', '),
+        'items': group.expand((record) => List<dynamic>.from(record['items'] ?? [])).toList(),
+        'photos': group.expand((record) => List<String>.from(record['photos'] ?? [])).toSet().toList(),
+        'scannedPdfs': group.expand((record) => List<String>.from(record['scannedPdfs'] ?? [])).toSet().toList(),
+        'uploadedBy': group.map((record) => record['uploadedBy']?.toString()).whereType<String>().toSet().join(', '),
+      };
     }).toList();
   }
 
   bool _matchesDisposalSearch(Map<String, dynamic> item, String query) {
     if (query.isEmpty) return true;
-    final searchableText = [
+    final searchableText = <Object?>[
       item['division'],
       item['date'],
       item['journal'],
       item['description'],
       item['uploadedBy'],
       item['createdAt'],
+      ...List<dynamic>.from(item['items'] ?? []).expand((rawItem) {
+        if (rawItem is! Map) return const <Object?>[];
+        return [rawItem['itemNumber'], rawItem['productName']];
+      }),
     ]
         .whereType<Object>()
         .map((value) => value.toString().toLowerCase())
@@ -232,6 +275,10 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
   }
 
   Widget _buildFilteredDisposalCard(Map<String, dynamic> item) {
+    final groupedRecords = item['_groupedDisposals'] is List
+        ? List<Map<String, dynamic>>.from(item['_groupedDisposals'] as List)
+        : <Map<String, dynamic>>[];
+    final isGrouped = groupedRecords.length > 1;
     final photos = List<String>.from(item['photos'] ?? []);
     final firstPhotoUrl = photos.isEmpty ? '' : _storageUrl(photos.first);
     final division = item['division']?.toString() ?? '-';
@@ -240,22 +287,31 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
         (item['journal']?.toString() ?? item['description']?.toString() ?? '')
             .trim();
 
-    return Card(
+    return LayoutBuilder(builder: (context, constraints) {
+      final compact = constraints.maxWidth < 420;
+      return Card(
       elevation: 0,
       color: Colors.white,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFFE5EBDD)),
+        side: const BorderSide(color: AppTheme.border),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () => _showDisposalDetailDialog(item),
+        onTap: () => isGrouped
+            ? _showGroupedDisposalDetailDialog(item)
+            : _showDisposalDetailDialog(item),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              _buildDisposalPhotoPreview(firstPhotoUrl, division),
+              _buildDisposalPhotoPreview(
+                firstPhotoUrl,
+                division,
+                width: compact ? 126 : 220,
+                height: compact ? 96 : 124,
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -285,6 +341,9 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
                       style:
                           const TextStyle(color: Colors.black54, fontSize: 13),
                     ),
+                    const SizedBox(height: 8),
+                    if (!isGrouped)
+                      _disposalPostingStatusBadge(item),
                     const Spacer(),
                     SizedBox(
                       height: 34,
@@ -299,6 +358,28 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
                                   color: Colors.black45, fontSize: 12),
                             ),
                           ),
+                          IconButton(
+                            tooltip: 'Export Excel untuk jurnal ini',
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(
+                                width: 34, height: 34),
+                            iconSize: 18,
+                            onPressed: () => _exportDisposalPostingDataToExcel(
+                                isGrouped ? groupedRecords : [item]),
+                            icon: const Icon(Icons.table_view_outlined),
+                          ),
+                          if (isGrouped)
+                            IconButton(
+                              tooltip: 'Lihat data gabungan',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                              iconSize: 18,
+                              onPressed: () => _showGroupedDisposalDetailDialog(item),
+                              icon: const Icon(Icons.folder_open_outlined),
+                            )
+                          else ...[
                           IconButton(
                             tooltip: 'Edit',
                             visualDensity: VisualDensity.compact,
@@ -320,6 +401,7 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
                             onPressed: () => _confirmDeleteDisposal(item),
                             icon: const Icon(Icons.delete_outline),
                           ),
+                          ],
                         ],
                       ),
                     ),
@@ -330,14 +412,65 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
           ),
         ),
       ),
+      );
+    });
+  }
+
+  Future<void> _showGroupedDisposalDetailDialog(
+      Map<String, dynamic> group) async {
+    final merged = <String, dynamic>{
+      ...group,
+      'photoRotations': <String, int>{},
+    }..remove('_groupedDisposals');
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => DesktopModalShell(
+        title: '${group['division']} - ${group['date']}',
+        subtitle: 'Data gabungan berdasarkan tanggal dan kategori',
+        icon: Icons.folder_copy_outlined,
+        maxWidth: 1180,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 660),
+          child: ListView(
+            children: [
+              _buildDetailRow('Kategori', group['division'].toString()),
+              _buildDetailRow('Tanggal', group['date'].toString()),
+              _buildDetailRow(
+                'Nomor Jurnal',
+                group['journal']?.toString().isNotEmpty == true
+                    ? group['journal'].toString()
+                    : '-',
+              ),
+              const SizedBox(height: 14),
+              _buildDisposalItemsTable(merged),
+              const SizedBox(height: 18),
+              _buildDisposalDocumentationPreview(merged),
+              const SizedBox(height: 18),
+            ],
+          ),
+        ),
+        actions: [
+          OutlinedButton.icon(
+            onPressed: () => _exportSingleDisposalToPdf(merged),
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            label: const Text('Download PDF Gabungan'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildDisposalPhotoPreview(String imageUrl, String title) {
+  Widget _buildDisposalPhotoPreview(String imageUrl, String title,
+      {required double width, required double height}) {
     return LandscapeImageFrame(
       imageUrl: imageUrl.isEmpty ? null : imageUrl,
-      width: 154,
-      height: 88,
+      width: width,
+      height: height,
       onTap: imageUrl.isEmpty
           ? null
           : () => _showImagePreview(context, title, imageUrl),

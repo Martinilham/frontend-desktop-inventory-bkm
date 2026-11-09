@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:inventory_bkm_desktop/theme/app_theme.dart';
 
 class SectionCard extends StatelessWidget {
   const SectionCard({
@@ -18,7 +19,7 @@ class SectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5EBDD)),
+        border: Border.all(color: AppTheme.border),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF7CA7B0).withOpacity(0.12),
@@ -38,7 +39,7 @@ class SectionCard extends StatelessWidget {
                   child: Text(
                     title,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: const Color(0xFF1D2B38),
+                          color: AppTheme.textPrimary,
                           fontWeight: FontWeight.w800,
                           fontSize: 20,
                         ),

@@ -43,12 +43,12 @@ extension DashboardAuditMediaBuilders on _DashboardScreenState {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5EBDD)),
+        border: Border.all(color: AppTheme.border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.receipt_long_outlined, color: Color(0xFF2E7D32)),
+          const Icon(Icons.receipt_long_outlined, color: AppTheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -56,11 +56,11 @@ extension DashboardAuditMediaBuilders on _DashboardScreenState {
               children: [
                 Text(title,
                     style: const TextStyle(
-                        color: Color(0xFF1D2B38),
+                        color: AppTheme.textPrimary,
                         fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
                 Text(subtitle,
-                    style: const TextStyle(color: Color(0xFF68777A))),
+                    style: const TextStyle(color: AppTheme.textSecondary)),
                 const SizedBox(height: 4),
                 Text(createdAt,
                     style: const TextStyle(
@@ -137,9 +137,9 @@ extension DashboardAuditMediaBuilders on _DashboardScreenState {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F7EF),
+        color: AppTheme.tableHeader,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5EBDD)),
+        border: Border.all(color: AppTheme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,14 +147,14 @@ extension DashboardAuditMediaBuilders on _DashboardScreenState {
           Text(
             map['action'] ?? '-',
             style: const TextStyle(
-              color: Color(0xFF1D2B38),
+              color: AppTheme.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             map['details']?.toString() ?? '-',
-            style: const TextStyle(color: Color(0xFF68777A)),
+            style: const TextStyle(color: AppTheme.textSecondary),
           ),
         ],
       ),

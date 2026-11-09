@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const primary = Color(0xFF2E7D32);
-  static const accent = Color(0xFFFFB74D);
-  static const background = Color(0xFFFAFBF7);
+  static const primary = Color(0xFFF5823A);
+  static const accent = Color(0xFF249A4A);
+  static const background = Color(0xFFFFFFFF);
   static const surface = Color(0xFFFFFFFF);
-  static const tableHeader = Color(0xFFF5F7EF);
-  static const border = Color(0xFFE5EBDD);
-  static const textPrimary = Color(0xFF1D2B38);
-  static const textSecondary = Color(0xFF68777A);
+  static const tableHeader = Color(0xFFFEF0E7);
+  static const border = Color(0xFFECE2DB);
+  static const textPrimary = Color(0xFF333333);
+  static const textSecondary = Color(0xFF666666);
 
   static ThemeData get light {
     return ThemeData(
@@ -17,9 +17,20 @@ class AppTheme {
       scaffoldBackgroundColor: background,
       colorScheme: ColorScheme.fromSeed(
         seedColor: primary,
+        primary: primary,
+        onPrimary: textPrimary,
         secondary: accent,
+        onSecondary: textPrimary,
+        primaryContainer: tableHeader,
+        onPrimaryContainer: textPrimary,
+        secondaryContainer: const Color(0xFFEEF7F1),
+        onSecondaryContainer: textPrimary,
         brightness: Brightness.light,
         surface: surface,
+        onSurface: textPrimary,
+        onSurfaceVariant: textSecondary,
+        outline: border,
+        outlineVariant: border,
       ),
       textTheme: const TextTheme(
         displayLarge: TextStyle(
@@ -55,7 +66,7 @@ class AppTheme {
         elevation: 0,
         color: surface,
         surfaceTintColor: Colors.transparent,
-        shadowColor: const Color(0xFF7CA7B0).withOpacity(0.14),
+        shadowColor: textPrimary.withOpacity(0.10),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: border),
@@ -70,7 +81,7 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
-          foregroundColor: Colors.white,
+          foregroundColor: textPrimary,
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 17),
           elevation: 0,
           textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
@@ -120,7 +131,7 @@ class AppTheme {
           fontSize: 13,
         ),
         dataTextStyle: const TextStyle(
-          color: Color(0xFF404247),
+          color: textPrimary,
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),

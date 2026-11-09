@@ -43,7 +43,7 @@ extension DashboardReadDataBuilders on _DashboardScreenState {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5EBDD)),
+        border: Border.all(color: AppTheme.border),
       ),
       child: Row(
         children: [
@@ -72,7 +72,7 @@ extension DashboardReadDataBuilders on _DashboardScreenState {
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 Text(DateFormat('dd MMM yyyy, HH:mm').format(createdAt),
-                    style: const TextStyle(color: Color(0xFF68777A))),
+                    style: const TextStyle(color: AppTheme.textSecondary)),
                 const SizedBox(height: 6),
                 Text(
                   (item['recognizedText']?.toString() ?? '').trim().isEmpty
@@ -81,7 +81,7 @@ extension DashboardReadDataBuilders on _DashboardScreenState {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style:
-                      const TextStyle(color: Color(0xFF68777A), fontSize: 12),
+                      const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                 ),
               ],
             ),
