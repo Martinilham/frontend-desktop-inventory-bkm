@@ -23,7 +23,8 @@ extension DashboardDisposalExports on _DashboardScreenState {
     final orange = xls.ExcelColor.fromHexString('#FCE4D6');
     final blue = xls.ExcelColor.fromHexString('#DDEBF7');
 
-    sheet.merge(xls.CellIndex.indexByString('A1'), xls.CellIndex.indexByString('D1'));
+    sheet.merge(
+        xls.CellIndex.indexByString('A1'), xls.CellIndex.indexByString('D1'));
     sheet.cell(xls.CellIndex.indexByString('A1')).value =
         xls.TextCellValue('RINGKASAN KELAYAKAN POSTING PER JURNAL');
     sheet.cell(xls.CellIndex.indexByString('A1')).cellStyle = xls.CellStyle(
@@ -35,9 +36,10 @@ extension DashboardDisposalExports on _DashboardScreenState {
       verticalAlign: xls.VerticalAlign.Center,
     );
     sheet.setRowHeight(0, 34);
-    sheet.merge(xls.CellIndex.indexByString('A2'), xls.CellIndex.indexByString('D2'));
+    sheet.merge(
+        xls.CellIndex.indexByString('A2'), xls.CellIndex.indexByString('D2'));
     sheet.cell(xls.CellIndex.indexByString('A2')).value = xls.TextCellValue(
-      'Jurnal hanya siap posting jika semua item di dalam jurnal tersebut siap posting.',
+      'Purchased/Received dijumlah sampai tanggal jurnal, lalu dikurangi qty jurnal sebelumnya dan jurnal ini. Ordered belum dihitung sebagai stok tersedia.',
     );
     sheet.cell(xls.CellIndex.indexByString('A2')).cellStyle = xls.CellStyle(
       backgroundColorHex: lightBlue,
@@ -50,8 +52,8 @@ extension DashboardDisposalExports on _DashboardScreenState {
     sheet.setRowHeight(1, 28);
 
     for (var column = 0; column < headers.length; column++) {
-      final cell = sheet.cell(xls.CellIndex.indexByColumnRow(
-          columnIndex: column, rowIndex: 3));
+      final cell = sheet.cell(
+          xls.CellIndex.indexByColumnRow(columnIndex: column, rowIndex: 3));
       cell.value = xls.TextCellValue(headers[column]);
       cell.cellStyle = xls.CellStyle(
         backgroundColorHex: navy,
@@ -72,7 +74,10 @@ extension DashboardDisposalExports on _DashboardScreenState {
           'ready' => 'BISA POSTING',
           'ordered' => 'BELUM BISA POSTING: masih Ordered',
           'insufficient' => 'BELUM BISA POSTING: qty melebihi batas',
-          'legacyCombined' => 'BELUM BISA POSTING: data lama menggabungkan beberapa jurnal; impor ulang',
+          'legacyCombined' =>
+            'BELUM BISA POSTING: data lama menggabungkan beberapa jurnal; impor ulang',
+          'notApplicable' =>
+            'DOKUMENTASI SAJA: tidak ada rincian item untuk pengecekan posting',
           _ => 'BELUM BISA POSTING: Receipt Status belum tersedia',
         };
     final journalRows = <String, Map<String, dynamic>>{};
@@ -87,24 +92,29 @@ extension DashboardDisposalExports on _DashboardScreenState {
       if (journals.isEmpty) journals.add('');
       final items = List<dynamic>.from(disposal['items'] ?? []);
       final statuses = items
-          .map((rawItem) => Map<String, dynamic>.from(rawItem as Map)
-              ['stockStatus']?.toString() ?? 'unknown')
+          .map((rawItem) =>
+              Map<String, dynamic>.from(rawItem as Map)['stockStatus']
+                  ?.toString() ??
+              'unknown')
           .toList();
       for (final journal in journals) {
         final journalKey = journal.isEmpty
             ? 'NO-JOURNAL:${disposal['_id'] ?? disposal['id'] ?? '${disposal['date']}|${disposal['division']}'}'
             : '${disposal['date']}|${disposal['division']}|${journal.toUpperCase()}';
-        final row = journalRows.putIfAbsent(journalKey, () => {
-              'date': disposal['date']?.toString() ?? '-',
-              'division': disposal['division']?.toString() ?? '-',
-              'journal': journal.isEmpty ? '-' : journal,
-              'statuses': <String>[],
-            });
+        final row = journalRows.putIfAbsent(
+            journalKey,
+            () => {
+                  'date': disposal['date']?.toString() ?? '-',
+                  'division': disposal['division']?.toString() ?? '-',
+                  'journal': journal.isEmpty ? '-' : journal,
+                  'statuses': <String>[],
+                });
         final journalStatuses = row['statuses'] as List<String>;
         if (journals.length > 1) {
           journalStatuses.add('legacyCombined');
         } else if (statuses.isEmpty) {
-          journalStatuses.add(disposal['postingStatus']?.toString() ?? 'unknown');
+          journalStatuses
+              .add(disposal['postingStatus']?.toString() ?? 'unknown');
         } else {
           journalStatuses.addAll(statuses);
         }
@@ -114,15 +124,19 @@ extension DashboardDisposalExports on _DashboardScreenState {
     var rowIndex = 4;
     for (final row in journalRows.values) {
       final statuses = row['statuses'] as List<String>;
-      final status = statuses.isNotEmpty && statuses.every((value) => value == 'ready')
-          ? 'ready'
-          : statuses.contains('legacyCombined')
-              ? 'legacyCombined'
-              : statuses.contains('unknown')
-              ? 'unknown'
-              : statuses.contains('ordered')
-                  ? 'ordered'
-                  : 'insufficient';
+      final status =
+          statuses.isNotEmpty && statuses.every((value) => value == 'ready')
+              ? 'ready'
+              : statuses.isNotEmpty &&
+                      statuses.every((value) => value == 'notApplicable')
+                  ? 'notApplicable'
+                  : statuses.contains('legacyCombined')
+                      ? 'legacyCombined'
+                      : statuses.contains('unknown')
+                          ? 'unknown'
+                          : statuses.contains('ordered')
+                              ? 'ordered'
+                              : 'insufficient';
       final background = switch (status) {
         'ready' => green,
         'ordered' => blue,
@@ -168,6 +182,7 @@ extension DashboardDisposalExports on _DashboardScreenState {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text('Excel disimpan: $fileName')));
   }
+
   Future<void> _exportAnalysisToExcel(
     List<Map<String, dynamic>> items,
     String dateFrom,

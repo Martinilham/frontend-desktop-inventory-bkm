@@ -145,10 +145,13 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
                   onPressed: _isExportingPdf
                       ? null
                       : () => _exportFilteredDisposalsToPdf(
-                            visibleItems.expand((item) {
-                              final records = item['_groupedDisposals'];
-                              return records is List ? records : [item];
-                            }).cast<Map<String, dynamic>>().toList(),
+                            visibleItems
+                                .expand((item) {
+                                  final records = item['_groupedDisposals'];
+                                  return records is List ? records : [item];
+                                })
+                                .cast<Map<String, dynamic>>()
+                                .toList(),
                           ),
                 ),
               ),
@@ -165,20 +168,24 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
     final end = DateTime(_filterEndDate!.year, _filterEndDate!.month,
         _filterEndDate!.day, 23, 59, 59);
 
-    final filtered = disposals.where((item) {
-      final map = item as Map<String, dynamic>;
-      final dateString = map['date']?.toString() ?? '';
-      final date = DateTime.tryParse(dateString);
-      if (date == null) return false;
-      final matchesDate = date.isAtSameMomentAs(start) ||
-          date.isAfter(start) && date.isBefore(end) ||
-          date.isAtSameMomentAs(end);
-      final filterDivision = _divisionFilterApiValue(_disposalFilterDivision);
-      final matchesDivision = filterDivision == 'all' ||
-          map['division']?.toString().toLowerCase() ==
-              filterDivision.toLowerCase();
-      return matchesDate && matchesDivision;
-    }).cast<Map<String, dynamic>>().toList();
+    final filtered = disposals
+        .where((item) {
+          final map = item as Map<String, dynamic>;
+          final dateString = map['date']?.toString() ?? '';
+          final date = DateTime.tryParse(dateString);
+          if (date == null) return false;
+          final matchesDate = date.isAtSameMomentAs(start) ||
+              date.isAfter(start) && date.isBefore(end) ||
+              date.isAtSameMomentAs(end);
+          final filterDivision =
+              _divisionFilterApiValue(_disposalFilterDivision);
+          final matchesDivision = filterDivision == 'all' ||
+              map['division']?.toString().toLowerCase() ==
+                  filterDivision.toLowerCase();
+          return matchesDate && matchesDivision;
+        })
+        .cast<Map<String, dynamic>>()
+        .toList();
     return _groupDisposalsByDateDivision(filtered);
   }
 
@@ -188,12 +195,34 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
     for (final record in records) {
       final date = (record['date']?.toString() ?? '').split('T').first;
       final division = (record['division']?.toString() ?? '').trim();
-      final key = '${date.toLowerCase()}|${division.toLowerCase()}';
+      final documentationType =
+          (record['documentationType']?.toString() ?? 'disposal').toLowerCase();
+      final key =
+          '${date.toLowerCase()}|${division.toLowerCase()}|$documentationType';
       groups.putIfAbsent(key, () => []).add(record);
     }
 
     return groups.values.map((group) {
       if (group.length == 1) return group.first;
+      final groupedItems = group
+          .expand((record) => List<dynamic>.from(record['items'] ?? []))
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      final itemStatuses = groupedItems
+          .map((item) => item['stockStatus']?.toString() ?? 'unknown')
+          .toList();
+      final postingStatus = itemStatuses.isEmpty
+          ? 'notApplicable'
+          : itemStatuses.contains('unknown')
+              ? 'unknown'
+              : itemStatuses.contains('ordered')
+                  ? 'ordered'
+                  : itemStatuses.contains('insufficient')
+                      ? 'insufficient'
+                      : itemStatuses.every((status) => status == 'ready')
+                          ? 'ready'
+                          : 'unknown';
       final journals = group
           .map((record) => (record['journal']?.toString() ?? '').trim())
           .where((journal) => journal.isNotEmpty)
@@ -203,11 +232,23 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
         '_groupedDisposals': group,
         'date': group.first['date'],
         'division': group.first['division'],
+        'documentationType': group.first['documentationType'] ?? 'disposal',
         'journal': journals.isEmpty ? '' : journals.join(', '),
-        'items': group.expand((record) => List<dynamic>.from(record['items'] ?? [])).toList(),
-        'photos': group.expand((record) => List<String>.from(record['photos'] ?? [])).toSet().toList(),
-        'scannedPdfs': group.expand((record) => List<String>.from(record['scannedPdfs'] ?? [])).toSet().toList(),
-        'uploadedBy': group.map((record) => record['uploadedBy']?.toString()).whereType<String>().toSet().join(', '),
+        'postingStatus': postingStatus,
+        'items': groupedItems,
+        'photos': group
+            .expand((record) => List<String>.from(record['photos'] ?? []))
+            .toSet()
+            .toList(),
+        'scannedPdfs': group
+            .expand((record) => List<String>.from(record['scannedPdfs'] ?? []))
+            .toSet()
+            .toList(),
+        'uploadedBy': group
+            .map((record) => record['uploadedBy']?.toString())
+            .whereType<String>()
+            .toSet()
+            .join(', '),
       };
     }).toList();
   }
@@ -282,6 +323,10 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
     final photos = List<String>.from(item['photos'] ?? []);
     final firstPhotoUrl = photos.isEmpty ? '' : _storageUrl(photos.first);
     final division = item['division']?.toString() ?? '-';
+    final documentationLabel =
+        item['documentationType']?.toString() == 'receipt'
+            ? 'Tanda Terima · '
+            : '';
     final date = item['date']?.toString() ?? '-';
     final journal =
         (item['journal']?.toString() ?? item['description']?.toString() ?? '')
@@ -290,134 +335,213 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
     return LayoutBuilder(builder: (context, constraints) {
       final compact = constraints.maxWidth < 420;
       return Card(
-      elevation: 0,
-      color: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: AppTheme.border),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => isGrouped
-            ? _showGroupedDisposalDetailDialog(item)
-            : _showDisposalDetailDialog(item),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              _buildDisposalPhotoPreview(
-                firstPhotoUrl,
-                division,
-                width: compact ? 126 : 220,
-                height: compact ? 96 : 124,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            division,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                        ),
-                        Text(date,
-                            style: const TextStyle(
-                                color: Colors.black54, fontSize: 12)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      journal.isEmpty ? 'Tidak ada jurnal.' : journal,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          const TextStyle(color: Colors.black54, fontSize: 13),
-                    ),
-                    const SizedBox(height: 8),
-                    if (!isGrouped)
-                      _disposalPostingStatusBadge(item),
-                    const Spacer(),
-                    SizedBox(
-                      height: 34,
-                      child: Row(
+        elevation: 0,
+        color: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: AppTheme.border),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => isGrouped
+              ? _showGroupedDisposalDetailDialog(item)
+              : _showDisposalDetailDialog(item),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                _buildDisposalPhotoPreview(
+                  firstPhotoUrl,
+                  division,
+                  width: compact ? 126 : 220,
+                  height: compact ? 96 : 124,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
                           Expanded(
                             child: Text(
-                              'Upload: ${item['uploadedBy']?.toString() ?? '-'}',
+                              '$documentationLabel$division',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                  color: Colors.black45, fontSize: 12),
+                                  fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                           ),
-                          IconButton(
-                            tooltip: 'Export Excel untuk jurnal ini',
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints.tightFor(
-                                width: 34, height: 34),
-                            iconSize: 18,
-                            onPressed: () => _exportDisposalPostingDataToExcel(
-                                isGrouped ? groupedRecords : [item]),
-                            icon: const Icon(Icons.table_view_outlined),
-                          ),
-                          if (isGrouped)
-                            IconButton(
-                              tooltip: 'Lihat data gabungan',
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-                              iconSize: 18,
-                              onPressed: () => _showGroupedDisposalDetailDialog(item),
-                              icon: const Icon(Icons.folder_open_outlined),
-                            )
-                          else ...[
-                          IconButton(
-                            tooltip: 'Edit',
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints.tightFor(
-                                width: 34, height: 34),
-                            iconSize: 18,
-                            onPressed: () => _showEditDisposalDialog(item),
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                          IconButton(
-                            tooltip: 'Delete',
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints.tightFor(
-                                width: 34, height: 34),
-                            iconSize: 18,
-                            color: Colors.red,
-                            onPressed: () => _confirmDeleteDisposal(item),
-                            icon: const Icon(Icons.delete_outline),
-                          ),
-                          ],
+                          Text(date,
+                              style: const TextStyle(
+                                  color: Colors.black54, fontSize: 12)),
                         ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      Text(
+                        journal.isEmpty ? 'Tidak ada jurnal.' : journal,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.black54, fontSize: 13),
+                      ),
+                      const SizedBox(height: 8),
+                      _disposalPostingStatusBadge(item),
+                      const Spacer(),
+                      SizedBox(
+                        height: 34,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Upload: ${item['uploadedBy']?.toString() ?? '-'}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    color: Colors.black45, fontSize: 12),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Export Excel untuk jurnal ini',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints.tightFor(
+                                  width: 34, height: 34),
+                              iconSize: 18,
+                              onPressed: () =>
+                                  _exportDisposalPostingDataToExcel(
+                                      isGrouped ? groupedRecords : [item]),
+                              icon: const Icon(Icons.table_view_outlined),
+                            ),
+                            if (isGrouped)
+                              IconButton(
+                                tooltip: 'Lihat, edit, atau hapus data grup',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(
+                                    width: 34, height: 34),
+                                iconSize: 18,
+                                onPressed: () =>
+                                    _showGroupedDisposalDetailDialog(item),
+                                icon: const Icon(Icons.folder_open_outlined),
+                              ),
+                            IconButton(
+                              tooltip: 'Edit pembuangan',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints.tightFor(
+                                  width: 34, height: 34),
+                              iconSize: 18,
+                              onPressed: () => isGrouped
+                                  ? _editGroupedDisposal(item)
+                                  : _showEditDisposalDialog(item),
+                              icon: const Icon(Icons.edit_outlined),
+                            ),
+                            IconButton(
+                              tooltip: 'Hapus pembuangan',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints.tightFor(
+                                  width: 34, height: 34),
+                              iconSize: 18,
+                              color: Colors.red,
+                              onPressed: () => isGrouped
+                                  ? _deleteGroupedDisposal(item)
+                                  : _confirmDeleteDisposal(item),
+                              icon: const Icon(Icons.delete_outline),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
       );
     });
   }
 
+  Future<Map<String, dynamic>?> _chooseGroupedDisposalRecord(
+      Map<String, dynamic> group, String action) async {
+    final records = group['_groupedDisposals'] is List
+        ? List<Map<String, dynamic>>.from(group['_groupedDisposals'] as List)
+        : <Map<String, dynamic>>[];
+    if (records.length == 1) return records.first;
+    if (records.isEmpty) return null;
+
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => DesktopModalShell(
+        title: 'Pilih data untuk $action',
+        subtitle: '${group['division']} · ${group['date']}',
+        icon: action == 'diedit' ? Icons.edit_outlined : Icons.delete_outline,
+        maxWidth: 620,
+        child: SizedBox(
+          height: 360,
+          child: ListView.separated(
+            itemCount: records.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final record = records[index];
+              final journal = record['journal']?.toString().trim() ?? '';
+              final itemCount =
+                  List<dynamic>.from(record['items'] ?? []).length;
+              return ListTile(
+                leading: const Icon(Icons.description_outlined),
+                title: Text(journal.isEmpty ? 'Tanpa jurnal' : journal),
+                subtitle: Text('$itemCount item'),
+                onTap: () => Navigator.pop(dialogContext, record),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Batal')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editGroupedDisposal(Map<String, dynamic> group) async {
+    final record = await _chooseGroupedDisposalRecord(group, 'diedit');
+    if (record != null && mounted) await _showEditDisposalDialog(record);
+  }
+
+  Future<void> _deleteGroupedDisposal(Map<String, dynamic> group) async {
+    final record = await _chooseGroupedDisposalRecord(group, 'dihapus');
+    if (record != null && mounted) await _confirmDeleteDisposal(record);
+  }
+
   Future<void> _showGroupedDisposalDetailDialog(
       Map<String, dynamic> group) async {
+    final groupedRecords = group['_groupedDisposals'] is List
+        ? List<Map<String, dynamic>>.from(group['_groupedDisposals'] as List)
+        : <Map<String, dynamic>>[];
+    final journalRecords = groupedRecords.where((record) {
+      final journal = record['journal']?.toString().trim() ?? '';
+      return journal.isNotEmpty ||
+          List<dynamic>.from(record['items'] ?? []).isNotEmpty;
+    }).toList()
+      ..sort((a, b) => (a['journal']?.toString() ?? '')
+          .toLowerCase()
+          .compareTo((b['journal']?.toString() ?? '').toLowerCase()));
+    final documentationRecords = groupedRecords
+        .where((record) => !journalRecords.contains(record))
+        .toList();
+    final journalGroup = <String, dynamic>{
+      ...group,
+      '_groupedDisposals': journalRecords,
+    };
+    final documentationGroup = <String, dynamic>{
+      ...group,
+      '_groupedDisposals': documentationRecords,
+    };
     final merged = <String, dynamic>{
       ...group,
       'photoRotations': <String, int>{},
@@ -442,6 +566,99 @@ extension DashboardDisposalListBuilders on _DashboardScreenState {
                     ? group['journal'].toString()
                     : '-',
               ),
+              if (journalRecords.isNotEmpty ||
+                  documentationRecords.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text('Data untuk tanggal ini',
+                    style: Theme.of(dialogContext).textTheme.titleMedium),
+                const SizedBox(height: 6),
+                if (journalRecords.isNotEmpty)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    child: ListTile(
+                      dense: true,
+                      title: Text('Jurnal bersama (${journalRecords.length})'),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: journalRecords.map((record) {
+                          final journal =
+                              record['journal']?.toString().trim() ?? '';
+                          final itemCount =
+                              List<dynamic>.from(record['items'] ?? []).length;
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                      '${journal.isEmpty ? 'Tanpa jurnal' : journal} · $itemCount item'),
+                                ),
+                                _disposalPostingStatusBadge(record),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      trailing: Wrap(
+                        spacing: 2,
+                        children: [
+                          IconButton(
+                            tooltip: 'Edit jurnal',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () {
+                              Navigator.pop(dialogContext);
+                              _editGroupedDisposal(journalGroup);
+                            },
+                            icon: const Icon(Icons.edit_outlined),
+                          ),
+                          IconButton(
+                            tooltip: 'Hapus jurnal',
+                            visualDensity: VisualDensity.compact,
+                            color: Colors.red,
+                            onPressed: () =>
+                                _deleteGroupedDisposal(journalGroup),
+                            icon: const Icon(Icons.delete_outline),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (documentationRecords.isNotEmpty)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    child: ListTile(
+                      dense: true,
+                      title:
+                          const Text('Dokumentasi bersama untuk semua jurnal'),
+                      subtitle: Text(
+                        '${documentationRecords.fold<int>(0, (count, record) => count + List<String>.from(record['photos'] ?? []).length)} foto · '
+                        '${documentationRecords.fold<int>(0, (count, record) => count + List<String>.from(record['scannedPdfs'] ?? []).length)} PDF',
+                      ),
+                      trailing: Wrap(
+                        spacing: 2,
+                        children: [
+                          IconButton(
+                            tooltip: 'Edit dokumentasi',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () {
+                              Navigator.pop(dialogContext);
+                              _editGroupedDisposal(documentationGroup);
+                            },
+                            icon: const Icon(Icons.edit_outlined),
+                          ),
+                          IconButton(
+                            tooltip: 'Hapus dokumentasi',
+                            visualDensity: VisualDensity.compact,
+                            color: Colors.red,
+                            onPressed: () =>
+                                _deleteGroupedDisposal(documentationGroup),
+                            icon: const Icon(Icons.delete_outline),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
               const SizedBox(height: 14),
               _buildDisposalItemsTable(merged),
               const SizedBox(height: 18),

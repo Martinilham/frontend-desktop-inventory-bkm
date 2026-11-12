@@ -559,7 +559,7 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
         ),
         const SizedBox(height: 4),
         Text(
-          'Receipt Status dihitung sesuai kondisi sampai tanggal jurnal ${disposal['date']?.toString() ?? '-'}; qty sisa = Purchased/Received sampai tanggal tersebut dikurangi qty jurnal ini.',
+          'Purchased/Received dijumlahkan sampai tanggal jurnal ${disposal['date']?.toString() ?? '-'}. Sisa = total diterima sampai tanggal ini - Qty jurnal sebelumnya - Qty jurnal ini. Ordered belum dihitung sebagai stok tersedia.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Colors.black54,
               ),
@@ -578,8 +578,12 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                   DataColumn(label: Text('Product name')),
                   DataColumn(label: Text('Warehouse')),
                   DataColumn(label: Text('Quantity'), numeric: true),
-                  DataColumn(label: Text('Purchased / Received'), numeric: true),
+                  DataColumn(
+                      label: Text('Purchased / Received kumulatif'),
+                      numeric: true),
                   DataColumn(label: Text('Ordered'), numeric: true),
+                  DataColumn(
+                      label: Text('Qty jurnal sebelumnya'), numeric: true),
                   DataColumn(label: Text('Sisa'), numeric: true),
                   DataColumn(label: Text('Status')),
                   DataColumn(label: Text('Cost Amount'), numeric: true),
@@ -596,18 +600,25 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                           DataCell(Text(item['warehouse']?.toString() ?? '-')),
                           DataCell(Text(quantityFormatter.format(
                               ((item['quantity'] as num?)?.toDouble() ??
-                                      double.tryParse(item['quantity']?.toString() ?? '') ??
+                                      double.tryParse(
+                                          item['quantity']?.toString() ?? '') ??
                                       0)
                                   .abs()))),
                           DataCell(Text(item['purchasedQuantity'] == null
                               ? '-'
-                              : quantityFormatter.format(
-                                  item['purchasedQuantity']))),
+                              : quantityFormatter
+                                  .format(item['purchasedQuantity']))),
                           DataCell(Text(quantityFormatter.format(
-                              (item['orderedQuantity'] as num?)?.toDouble() ?? 0))),
+                              (item['orderedQuantity'] as num?)?.toDouble() ??
+                                  0))),
+                          DataCell(Text(quantityFormatter.format(
+                              (item['previousDisposedQuantity'] as num?)
+                                      ?.toDouble() ??
+                                  0))),
                           DataCell(Text(item['remainingQuantity'] == null
                               ? '-'
-                              : quantityFormatter.format(item['remainingQuantity']))),
+                              : quantityFormatter
+                                  .format(item['remainingQuantity']))),
                           DataCell(_disposalPostingStatusBadge({
                             'postingStatus': item['stockStatus'] ?? 'unknown',
                           })),
@@ -637,7 +648,10 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Dokumentasi',
+        Text(
+            disposal['documentationType']?.toString() == 'receipt'
+                ? 'Dokumentasi Tanda Terima'
+                : 'Dokumentasi Pembuangan',
             style: Theme.of(context)
                 .textTheme
                 .titleMedium
@@ -960,13 +974,16 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                 final pages = snapshot.data ?? const <Uint8List>[];
                 if (pages.isEmpty &&
                     snapshot.connectionState == ConnectionState.done) {
-                  return const Center(child: Text('PDF tidak memiliki halaman'));
+                  return const Center(
+                      child: Text('PDF tidak memiliki halaman'));
                 }
                 return ListView.builder(
                   padding: const EdgeInsets.all(12),
                   scrollDirection: Axis.horizontal,
                   itemCount: pages.length +
-                      (snapshot.connectionState == ConnectionState.done ? 0 : 1),
+                      (snapshot.connectionState == ConnectionState.done
+                          ? 0
+                          : 1),
                   itemBuilder: (context, index) {
                     if (index >= pages.length) {
                       return const SizedBox(
@@ -983,14 +1000,16 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                             IconButton(
                               tooltip: 'Rotate kiri',
                               visualDensity: VisualDensity.compact,
-                              onPressed: () => setState(() => rotations[index] = (turns + 3) % 4),
+                              onPressed: () => setState(
+                                  () => rotations[index] = (turns + 3) % 4),
                               icon: const Icon(Icons.rotate_left, size: 18),
                             ),
                             Text('Hal. ${index + 1}'),
                             IconButton(
                               tooltip: 'Rotate kanan',
                               visualDensity: VisualDensity.compact,
-                              onPressed: () => setState(() => rotations[index] = (turns + 1) % 4),
+                              onPressed: () => setState(
+                                  () => rotations[index] = (turns + 1) % 4),
                               icon: const Icon(Icons.rotate_right, size: 18),
                             ),
                           ]),
@@ -1112,7 +1131,8 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
             return const Center(child: Text('Gagal menampilkan isi PDF'));
           }
           final pages = snapshot.data ?? const <Uint8List>[];
-          if (pages.isEmpty && snapshot.connectionState == ConnectionState.done) {
+          if (pages.isEmpty &&
+              snapshot.connectionState == ConnectionState.done) {
             return const Center(child: Text('PDF tidak memiliki halaman'));
           }
           return ListView.builder(
@@ -1135,16 +1155,19 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                     Row(children: [
                       Expanded(
                         child: Text('Halaman ${index + 1}',
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
                       ),
                       IconButton(
                         tooltip: 'Rotate kiri',
-                        onPressed: () => setState(() => rotations[index] = (turns + 3) % 4),
+                        onPressed: () =>
+                            setState(() => rotations[index] = (turns + 3) % 4),
                         icon: const Icon(Icons.rotate_left),
                       ),
                       IconButton(
                         tooltip: 'Rotate kanan',
-                        onPressed: () => setState(() => rotations[index] = (turns + 1) % 4),
+                        onPressed: () =>
+                            setState(() => rotations[index] = (turns + 1) % 4),
                         icon: const Icon(Icons.rotate_right),
                       ),
                     ]),
@@ -1160,7 +1183,8 @@ extension DashboardDisposalDialogs on _DashboardScreenState {
                           maxScale: 5,
                           child: RotatedBox(
                             quarterTurns: turns,
-                            child: Image.memory(pages[index], fit: BoxFit.contain),
+                            child:
+                                Image.memory(pages[index], fit: BoxFit.contain),
                           ),
                         ),
                       ),

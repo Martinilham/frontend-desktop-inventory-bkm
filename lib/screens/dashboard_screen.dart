@@ -205,7 +205,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
-      _receiptLocationOptions = prefs.getStringList('receipt_location_options') ?? [];
+      _receiptLocationOptions =
+          prefs.getStringList('receipt_location_options') ?? [];
     });
   }
 
@@ -223,9 +224,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               width: 420,
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Row(children: [
-                  Expanded(child: TextField(
+                  Expanded(
+                      child: TextField(
                     controller: input,
-                    decoration: const InputDecoration(labelText: 'Tambah lokasi'),
+                    decoration:
+                        const InputDecoration(labelText: 'Tambah lokasi'),
                     onSubmitted: (value) {
                       final item = value.trim();
                       if (item.isNotEmpty && !options.contains(item)) {
@@ -259,7 +262,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             trailing: IconButton(
                               tooltip: 'Hapus pilihan',
                               icon: const Icon(Icons.delete_outline),
-                              onPressed: () => setDialogState(() => options.removeAt(index)),
+                              onPressed: () =>
+                                  setDialogState(() => options.removeAt(index)),
                             ),
                           ),
                         ),
@@ -267,8 +271,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ]),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Batal')),
-              FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Simpan')),
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Batal')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Simpan')),
             ],
           ),
         ),
@@ -288,11 +296,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final users = await widget.apiService.listUsers();
       final audit = await widget.apiService.listAudit();
       final disposals = await widget.apiService.listDisposals();
-      var inventoryBalances = <dynamic>[];
       var receiptHistory = <dynamic>[];
       try {
         final inventory = await widget.apiService.getInventoryTransactions();
-        inventoryBalances = List<dynamic>.from(inventory['balances'] ?? []);
         receiptHistory = List<dynamic>.from(inventory['receiptHistory'] ?? []);
       } on AuthException {
         rethrow;
@@ -306,8 +312,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'me': me['user'],
         'users': users,
         'audit': audit,
-        'disposals': _addDisposalStockStatus(
-            disposals, inventoryBalances, receiptHistory),
+        'disposals': _addDisposalStockStatus(disposals, receiptHistory),
         'grabmerch': await widget.apiService.listGrabMerch(),
         'absenceDocuments': await widget.apiService.listAbsenceDocuments(),
         'formPhotoDocuments': await widget.apiService.listFormPhotoDocuments(),
@@ -688,7 +693,8 @@ class _ReceiptLocationDropdownState extends State<_ReceiptLocationDropdown> {
       decoration: InputDecoration(labelText: widget.label),
       items: [
         const DropdownMenuItem<String>(value: '', child: Text('Pilih lokasi')),
-        ...values.map((value) => DropdownMenuItem(value: value, child: Text(value))),
+        ...values
+            .map((value) => DropdownMenuItem(value: value, child: Text(value))),
       ],
       onChanged: (value) {
         setState(() => _value = value);

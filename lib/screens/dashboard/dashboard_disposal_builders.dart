@@ -3,11 +3,7 @@ part of '../dashboard_screen.dart';
 
 extension DashboardDisposalBuilders on _DashboardScreenState {
   List<dynamic> _addDisposalStockStatus(
-      List<dynamic> disposals,
-      List<dynamic> inventoryBalances,
-      List<dynamic> receiptHistory) {
-    final stockByItem = <String, double>{};
-    final stockByItemWarehouse = <String, double>{};
+      List<dynamic> disposals, List<dynamic> receiptHistory) {
     final receiptByItem = <String, List<Map<String, dynamic>>>{};
     for (final rawReceipt in receiptHistory) {
       final receipt = Map<String, dynamic>.from(rawReceipt as Map);
@@ -16,74 +12,41 @@ extension DashboardDisposalBuilders on _DashboardScreenState {
       if (itemNumber.isEmpty) continue;
       receiptByItem.putIfAbsent(itemNumber, () => []).add(receipt);
     }
-    for (final rawBalance in inventoryBalances) {
-      final balance = Map<String, dynamic>.from(rawBalance as Map);
-      final itemNumber = balance['itemNumber']?.toString().trim().toUpperCase();
-      if (itemNumber == null || itemNumber.isEmpty) continue;
-      final warehouse =
-          balance['warehouse']?.toString().trim().toUpperCase() ?? '';
-      final openingQuantity =
-          (balance['openingQuantity'] as num?)?.toDouble() ??
-              double.tryParse(balance['openingQuantity']?.toString() ?? '') ??
-              0;
-      // Disposal availability starts with the prior Value Report. Purchased
-      // receipts from the transaction history are added regardless of date.
-      final quantity = openingQuantity;
-      stockByItem.update(itemNumber, (value) => value + quantity,
-          ifAbsent: () => quantity);
-      if (warehouse.isNotEmpty) {
-        final key = '$itemNumber|$warehouse';
-        stockByItemWarehouse.update(key, (value) => value + quantity,
-            ifAbsent: () => quantity);
-      }
+    final disposalMaps =
+        disposals.map((raw) => Map<String, dynamic>.from(raw as Map)).toList();
+    final calculatedItems = <String, List<Map<String, dynamic>>>{};
+    final disposedBefore = <String, double>{};
+    String dateOnly(Object? value) {
+      final raw = value?.toString() ?? '';
+      return raw.length >= 10 ? raw.substring(0, 10) : '';
     }
 
-    final disposalMaps = disposals
-        .map((raw) => Map<String, dynamic>.from(raw as Map))
-        .toList();
-    final calculatedItems = <String, List<Map<String, dynamic>>>{};
-    for (final disposal in disposalMaps) {
+    String disposalKey(Map<String, dynamic> disposal) =>
+        disposal['_id']?.toString() ??
+        disposal['id']?.toString() ??
+        '${disposal['date']}|${disposal['division']}';
+    final chronologicalDisposals = List<Map<String, dynamic>>.from(disposalMaps)
+      ..sort((a, b) {
+        final dateOrder = dateOnly(a['date']).compareTo(dateOnly(b['date']));
+        if (dateOrder != 0) return dateOrder;
+        return (a['journal']?.toString() ?? '')
+            .toLowerCase()
+            .compareTo((b['journal']?.toString() ?? '').toLowerCase());
+      });
+
+    for (final disposal in chronologicalDisposals) {
+      final journalDate = dateOnly(disposal['date']);
       final items = List<Map<String, dynamic>>.from(
         (disposal['items'] as List? ?? []).map(
           (item) => Map<String, dynamic>.from(item as Map),
         ),
       );
       if (items.isEmpty) {
-        calculatedItems[disposal['_id']?.toString() ?? disposal['id']?.toString() ?? '${disposal['date']}|${disposal['division']}'] = [];
+        calculatedItems[disposalKey(disposal)] = [];
         continue;
       }
 
-      // Compare against this journal only. Other disposal journals must not
-      // reduce the remaining quantity shown for the current journal.
-      final disposedByItem = <String, double>{};
-      double purchasedInventory(String itemNumber, String warehouse) {
-        var quantity = 0.0;
-        for (final receipt in receiptByItem[itemNumber] ?? const []) {
-          final receiptWarehouse =
-              receipt['warehouse']?.toString().trim().toUpperCase() ?? '';
-          if (warehouse.isNotEmpty &&
-              receiptWarehouse.isNotEmpty &&
-              warehouse != receiptWarehouse) {
-            continue;
-          }
-          final receiptQuantity =
-              (receipt['quantity'] as num?)?.toDouble() ?? 0;
-          if (receiptQuantity > 0) quantity += receiptQuantity;
-        }
-        return quantity;
-      }
-      for (final item in items) {
-        final itemNumber =
-            item['itemNumber']?.toString().trim().toUpperCase() ?? '';
-        final quantity = (item['quantity'] as num?)?.toDouble() ??
-            double.tryParse(item['quantity']?.toString() ?? '') ??
-            0;
-        if (itemNumber.isEmpty) continue;
-        disposedByItem.update(itemNumber, (value) => value + quantity.abs(),
-            ifAbsent: () => quantity.abs());
-      }
-
-      final requiredByKey = <String, double>{};
+      final currentJournalQty = <String, double>{};
       for (final item in items) {
         final itemNumber =
             item['itemNumber']?.toString().trim().toUpperCase() ?? '';
@@ -94,23 +57,64 @@ extension DashboardDisposalBuilders on _DashboardScreenState {
         final quantity = (item['quantity'] as num?)?.toDouble() ??
             double.tryParse(item['quantity']?.toString() ?? '') ??
             0;
-        requiredByKey.update(key, (value) => value + quantity.abs(),
+        currentJournalQty.update(key, (value) => value + quantity.abs(),
             ifAbsent: () => quantity.abs());
       }
 
       final stockCheckByKey = <String, Map<String, dynamic>>{};
-      for (final entry in requiredByKey.entries) {
+      for (final entry in currentJournalQty.entries) {
         final key = entry.key;
         final itemNumber = key.split('|').first;
-        final baseAvailable = key.contains('|')
-            ? (stockByItemWarehouse[key] ?? 0)
-            : (stockByItem[itemNumber] ?? 0);
-        final warehouse = key.contains('|') ? key.split('|').skip(1).join('|') : '';
-        final available = baseAvailable + purchasedInventory(itemNumber, warehouse);
+        final warehouse =
+            key.contains('|') ? key.split('|').skip(1).join('|') : '';
+        var purchased = 0.0;
+        var ordered = 0.0;
+        var receiptDataFound = false;
+        for (final receipt in receiptByItem[itemNumber] ?? const []) {
+          final receiptWarehouse =
+              receipt['warehouse']?.toString().trim().toUpperCase() ?? '';
+          if (warehouse.isNotEmpty &&
+              receiptWarehouse.isNotEmpty &&
+              warehouse != receiptWarehouse) {
+            continue;
+          }
+          final receiptDate = dateOnly(receipt['date']);
+          if (receiptDate.isNotEmpty &&
+              journalDate.isNotEmpty &&
+              receiptDate.compareTo(journalDate) > 0) {
+            continue;
+          }
+          final receiptStatus =
+              receipt['receiptStatus']?.toString().toLowerCase().trim() ?? '';
+          final receiptQuantity =
+              (receipt['quantity'] as num?)?.toDouble() ?? 0;
+          if (receiptStatus == 'ordered') {
+            receiptDataFound = true;
+            ordered += receiptQuantity.abs();
+          } else if (receiptQuantity > 0) {
+            receiptDataFound = true;
+            purchased += receiptQuantity;
+          }
+        }
+        final priorDisposed = disposedBefore[key] ?? 0;
+        final remaining = purchased - priorDisposed - entry.value;
+        final isEligible = receiptDataFound && remaining >= -1e-9;
+        final status = !receiptDataFound
+            ? 'unknown'
+            : purchased <= 0 && ordered > 0
+                ? 'ordered'
+                : isEligible
+                    ? 'ready'
+                    : 'insufficient';
         stockCheckByKey[key] = {
-          'inventoryQuantity': available,
+          'inventoryQuantity': purchased - priorDisposed,
           'requiredQuantity': entry.value,
-          'stockSufficient': available + 1e-9 >= entry.value,
+          'previousDisposedQuantity': priorDisposed,
+          'stockSufficient': isEligible,
+          'purchasedQuantity': receiptDataFound ? purchased : null,
+          'orderedQuantity': ordered,
+          'remainingQuantity': receiptDataFound ? remaining : null,
+          'stockStatus': status,
         };
       }
 
@@ -125,63 +129,30 @@ extension DashboardDisposalBuilders on _DashboardScreenState {
                 ? itemNumber
                 : '$itemNumber|$warehouse';
         final check = stockCheckByKey[key];
-        final itemKey = itemNumber;
-        var purchased = 0.0;
-        var ordered = 0.0;
-        var receiptDataFound = false;
-        for (final receipt in receiptByItem[itemKey] ?? const []) {
-          final receiptWarehouse =
-              receipt['warehouse']?.toString().trim().toUpperCase() ?? '';
-          if (warehouse.isNotEmpty &&
-              receiptWarehouse.isNotEmpty &&
-              warehouse != receiptWarehouse) {
-            continue;
-          }
-          final receiptStatus =
-              receipt['receiptStatus']?.toString().toLowerCase().trim() ?? '';
-          final receiptQuantity =
-              (receipt['quantity'] as num?)?.toDouble() ?? 0;
-          if (receiptStatus == 'ordered') {
-            receiptDataFound = true;
-            ordered += receiptQuantity.abs();
-          }
-          if (receiptQuantity > 0) {
-            receiptDataFound = true;
-            purchased += receiptQuantity;
-          }
-        }
-        final disposedInJournal = disposedByItem[itemKey] ?? 0;
-        final remaining = receiptDataFound
-            ? purchased - disposedInJournal
-            : null;
-        final isEligible = remaining != null && remaining >= -1e-9;
         return {
           ...item,
           'inventoryQuantity': check?['inventoryQuantity'],
           'requiredQuantity': check?['requiredQuantity'],
+          'previousDisposedQuantity': check?['previousDisposedQuantity'] ?? 0,
           'stockSufficient': check?['stockSufficient'] == true,
-          'purchasedQuantity': receiptDataFound
-              ? purchased
-              : null,
-          'orderedQuantity': ordered,
-          'remainingQuantity': remaining,
-          'stockStatus': !receiptDataFound
-              ? 'unknown'
-              : purchased <= 0 && ordered > 0
-                  ? 'ordered'
-              : isEligible
-                  ? 'ready'
-                  : 'insufficient',
-          'canPost': isEligible,
+          'purchasedQuantity': check?['purchasedQuantity'],
+          'orderedQuantity': check?['orderedQuantity'] ?? 0,
+          'remainingQuantity': check?['remainingQuantity'],
+          'stockStatus': check?['stockStatus'] ?? 'unknown',
+          'canPost': check?['stockSufficient'] == true,
         };
       }).toList();
-      final key = disposal['_id']?.toString() ?? disposal['id']?.toString() ?? '${disposal['date']}|${disposal['division']}';
-      calculatedItems[key] = checkedItems;
+      calculatedItems[disposalKey(disposal)] = checkedItems;
+      for (final entry in currentJournalQty.entries) {
+        disposedBefore.update(entry.key, (value) => value + entry.value,
+            ifAbsent: () => entry.value);
+      }
     }
     return disposalMaps.map((disposal) {
-      final key = disposal['_id']?.toString() ?? disposal['id']?.toString() ?? '${disposal['date']}|${disposal['division']}';
+      final key = disposalKey(disposal);
       final items = calculatedItems[key] ?? [];
-      final canPost = items.isNotEmpty && items.every((item) => item['canPost'] == true);
+      final canPost =
+          items.isNotEmpty && items.every((item) => item['canPost'] == true);
       return {
         ...disposal,
         'items': items,
@@ -189,7 +160,11 @@ extension DashboardDisposalBuilders on _DashboardScreenState {
             ? 'unknown'
             : items.any((item) => item['stockStatus'] == 'ordered')
                 ? 'ordered'
-                : canPost ? 'ready' : 'insufficient',
+                : items.isEmpty
+                    ? 'notApplicable'
+                    : canPost
+                        ? 'ready'
+                        : 'insufficient',
       };
     }).toList();
   }
@@ -198,6 +173,11 @@ extension DashboardDisposalBuilders on _DashboardScreenState {
     final status = record['postingStatus']?.toString() ?? 'unknown';
     final (label, color, icon) = switch (status) {
       'ready' => ('Siap posting', Colors.green, Icons.check_circle_outline),
+      'notApplicable' => (
+          'Dokumentasi saja',
+          Colors.blueGrey,
+          Icons.description_outlined
+        ),
       'ordered' => ('Masih Ordered', Colors.blueGrey, Icons.schedule_outlined),
       'insufficient' => (
           'Qty melebihi batas',
@@ -1790,10 +1770,13 @@ extension DashboardDisposalBuilders on _DashboardScreenState {
                   _filterEndDate == null
               ? null
               : () => _exportDisposalPostingDataToExcel(
-                    _filterDisposals(disposals).expand((item) {
-                      final records = item['_groupedDisposals'];
-                      return records is List ? records : [item];
-                    }).cast<Map<String, dynamic>>().toList(),
+                    _filterDisposals(disposals)
+                        .expand((item) {
+                          final records = item['_groupedDisposals'];
+                          return records is List ? records : [item];
+                        })
+                        .cast<Map<String, dynamic>>()
+                        .toList(),
                   ),
         ),
         PrimaryButton(
